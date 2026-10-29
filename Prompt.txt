@@ -1,0 +1,585 @@
+# BUILD A FULLY PLAYABLE TEST APP FOR MY BOARD GAME: DAM IT
+
+You are my lead game developer, gameplay programmer, UI designer and playtesting assistant. I want you to build a working browser-based version of my tabletop board game, **Dam It**, so I can play complete games, test the rules, identify problems and change the design.
+
+Do not merely explain how to build it, give me mock-ups, or stop after generating a plan. Work in the current project folder, implement the app, run it, test it, fix errors and give me clear instructions for launching it locally.
+
+If you have access to a terminal and file-editing tools, use them to complete the implementation. Ask for approval when required.
+
+## 1. Main objective
+
+Build a functional, attractive, easy-to-use game that lets me:
+
+- Play a complete 10-round game.
+- Play with four factions: Ducks, Swans, Frogs and Beavers.
+- Play alone against three computer-controlled opponents.
+- Play in local hot-seat mode, where up to four people take turns at the same computer.
+- Test movement, currents, islands, whirlpools, resources, equipment, Power Cards, missions and secret roles.
+- See the exact reason every animal moves or changes position.
+- Change game rules, costs, current strengths and other balance settings without editing source code.
+- Restart games quickly and play again with different settings.
+- See the final scores, the winning faction and a breakdown of how each player scored.
+
+The priority is a **reliable, playable prototype for testing game balance**, not online multiplayer or a commercial release.
+
+## 2. Recommended technology
+
+Use a simple, reliable local web app:
+
+- React
+- TypeScript
+- Vite
+- CSS for the visual design
+- Local browser storage for saving settings and, where practical, game progress
+
+Choose sensible additional libraries only if they materially help.
+
+The game must run in a normal desktop browser. Do not require a paid service, external game server, online account or database.
+
+If the project folder is empty, set it up. If it already contains files, inspect them before changing anything.
+
+## 3. The game concept and board
+
+Dam It is a competitive river-crossing game about getting your animal herd from the top bank to the bottom bank.
+
+There are four factions:
+
+- Ducks
+- Swans
+- Frogs
+- Beavers
+
+Each faction starts with its own animal pieces. Animals try to cross a wide, dangerous river, use islands and equipment, manipulate the current, interfere with opponents and complete secret missions.
+
+The game lasts 10 rounds.
+
+### Board orientation
+
+- The river flows horizontally from left to right.
+- Animals cross the river vertically, from the top bank to the bottom bank.
+- The river should extend across the board, not run from the top edge to the bottom edge.
+- The top and bottom banks should be relatively small compared with the river.
+- Use exactly four islands in the initial board layout.
+- River tiles and island tiles must be the same size.
+- Large islands should fill their tile; small islands should not fill the entire tile.
+- The board should be readable and attractive, with clearly marked spaces and animal positions.
+- Do not add resource-gathering tiles to the river.
+- Do not add bridges or logs.
+
+Create a sensible initial map with four islands, river tiles, current spaces and whirlpools. Make the layout configurable so I can change it later.
+
+The app should display the full board, all animals, discovered currents, islands, whirlpools, dams and other placed equipment. Each faction must have a distinct colour and clearly identifiable pieces.
+
+## 4. Game length and round structure
+
+The game lasts exactly 10 rounds unless I change the setting.
+
+Each round follows this sequence:
+
+### Phase A: Resource collection
+
+At the beginning of the round, players collect resources using the collector and production-card system described below.
+
+### Phase B: Player turns
+
+Each player takes one turn in faction order.
+
+The initial version should support four players, with one turn per faction per round. The order should be visible and configurable.
+
+Each turn allows a player to move animals and perform the permitted action or actions according to their faction rules.
+
+Implement the extra action for Frogs as described in the faction section.
+
+### Phase C: Current phase
+
+After all four players have taken their turns, resolve the river current across the board.
+
+Apply current effects to eligible animals based on their spaces, current strengths, equipment, faction abilities and active Power Cards.
+
+Resolve all movement consistently and show it in the game log.
+
+After the Current Phase, the round ends and the next round begins.
+
+After Round 10's Current Phase, calculate the final score and reveal secret roles.
+
+Do not resolve the current after each individual player's turn. It happens once, after every player has acted.
+
+## 5. Animal movement and turns
+
+Create an intuitive system for selecting an animal and moving it along legal spaces.
+
+The initial movement value for all four factions is 3 movement points per turn, subject to faction abilities.
+
+Implement movement so that:
+
+- Players can see how many movement points remain.
+- Illegal moves are rejected with a clear explanation.
+- Animals can share spaces unless a specific rule prevents it.
+- Players can choose which of their animals to move.
+- The interface clearly distinguishes the player's active turn.
+- Every move is recorded in the game log.
+- Players can undo an action before ending their turn where practical. Do not allow undo to bypass hidden information or random outcomes unfairly.
+- The app should prevent accidental duplicate turns and accidental double resolution of a Current Phase.
+
+If movement across individual spaces is ambiguous, implement a clear tile-by-tile movement system and make its rules configurable.
+
+## 6. Current system
+
+The current is a major part of the game. It must create unpredictable decisions rather than making the river feel safe or completely predictable.
+
+Implement these rules:
+
+- Each river tile has a current strength.
+- Current strengths can be 0, 1, 2, 3 or 4.
+- Strength 4 should be rare.
+- Some spaces should have a current strength of 0.
+- Current moves animals downstream, in the river's left-to-right direction, according to the current strength and relevant rules.
+- Current effects resolve after all player turns.
+- Some currents are hidden until an animal enters the relevant tile.
+- When a hidden current is revealed, it remains visible for the rest of the game.
+- The initial board should mix safe-looking spaces, dangerous currents and uncertain routes.
+- The current values and distribution must be configurable.
+
+When the Current Phase occurs, show a clear animation or step-by-step explanation of which animals move and why. Make it possible to skip animations.
+
+The current resolution should handle multiple animals, dams, anchors, swan resistance, duck abilities and active Power Cards consistently.
+
+Create a deterministic resolution order for simultaneous effects. Display this order in the rules/settings panel and record it in the log.
+
+Do not quietly ignore conflicting effects. Give them an explicit resolution order that I can change or inspect.
+
+## 7. Whirlpools
+
+Whirlpools are dangerous spaces.
+
+The concept we discussed is that a whirlpool can direct an animal left, right or forward, rather than simply giving it extra movement.
+
+Implement a whirlpool mechanic that can move affected animals in one of these directions. Use a roll or configurable random outcome to select the result, and show the outcome clearly.
+
+Each animal can encounter a maximum of one whirlpool effect during a single Current Phase.
+
+Because the precise whirlpool resolution is not fully finalised, place its direction probabilities, timing and movement distance in editable rules settings. Use clearly labelled provisional defaults.
+
+## 8. Factions
+
+Implement the following faction statistics and abilities.
+
+### Ducks
+
+- Starting animals: 10.
+- Movement: 3 points.
+- Ability: **Go With the Flow**. When a Duck is moved by a current, it may move one additional space in the direction of that current.
+- The Duck ability must not create an infinite movement loop or cause the same current effect to trigger repeatedly.
+
+The older Distraction weakness may still be part of the game. The previous version used a Distraction token and made Ducks particularly vulnerable to distraction. Include this mechanic as an optional rule that can be turned on or off until it is confirmed.
+
+If enabled, implement a configurable Distraction mechanic rather than inventing a complicated new system.
+
+### Swans
+
+- Starting animals: 8.
+- Movement: 3 points.
+- Ability: the current affects Swans one space less than normal, where applicable.
+
+Make the interaction between this ability and current strength configurable and explicit. Do not allow negative movement.
+
+### Frogs
+
+- Starting animals: 10.
+- Movement: 3 points.
+- Ability: Frogs get one extra action per turn.
+- Weakness: Frogs cannot use Anchors or Ropes.
+
+Make the extra-action system clear in the interface and prevent it from accidentally granting unlimited actions.
+
+### Beavers
+
+- Starting animals: 10.
+- Movement: 3 points.
+- Ability: things they build cost one fewer resource than the normal cost.
+
+This discount applies to eligible construction, such as Dams, but not automatically to unrelated purchases unless the rules explicitly say so.
+
+Make all faction statistics and abilities editable in a rules configuration panel.
+
+## 9. Resources and production
+
+The core resources are:
+
+- Wood
+- Clay
+- Stone
+
+Resources are used to buy equipment and Power Cards.
+
+Do not put resource tiles on the river. Resources are collected through a separate market/resource board.
+
+### Collector system
+
+The design uses four vertical resource areas on a separate resource board.
+
+At the beginning of each round, players place or assign their collectors to one of the four resource areas. A production card is then revealed to determine the resources produced.
+
+Implement:
+
+- Four clearly visible resource areas.
+- A collector for each player.
+- A production-card deck.
+- A visible discard pile.
+- Resource spaces below the relevant resource areas.
+- A clear display of each player's resource totals.
+- A log explaining the resources gained each round.
+
+Do not create a separate market round. Resource collection is Phase A of the main round structure.
+
+The exact production-card distribution and the detailed interaction between collectors and production are not completely finalised. Build an editable production system with sensible provisional defaults. Let me change card contents, resource quantities and collector resolution in the settings.
+
+Do not add a trading system unless it can be switched on separately. The current prototype should focus on collectors and production.
+
+## 10. Equipment and construction
+
+Only include the following equipment in the initial purchase guide:
+
+1. Dam
+2. Raft
+3. Rope
+4. Anchor
+5. Power Cards
+
+Do not add bridges, logs, boats, extra hands, repair equipment, scouts, trading posts or other equipment.
+
+The exact final prices have not been settled. Put all costs in a central editable configuration rather than hardcoding them throughout the app.
+
+Use sensible provisional costs and label them as provisional. Let me change the costs of each item and its resource requirements from the settings panel.
+
+### Dam
+
+The printed description is:
+
+"Calms the water above and below the dam and stays until destroyed."
+
+Implement a dam as a persistent structure that calms the current in the relevant spaces above and below it.
+
+The player who built a dam chooses, once per round, one animal that cannot use that dam's calming effect.
+
+A dam can be destroyed by paying a configurable amount of Stone. The intended cost was discussed as 2 or 3 Stone and has not been finalised.
+
+When a dam is destroyed, animals immediately downstream of it are swept two spaces forward, subject to legal movement and board boundaries. Make this a visible, logged event.
+
+Dams must remain until destroyed.
+
+### Raft
+
+The printed effect is:
+
+"Move one animal forward without using a movement point."
+
+Implement this effect and make its timing clear.
+
+### Rope
+
+Ropes are purchasable equipment used to manipulate or pull an animal according to the game's rope rule.
+
+The exact final wording and effect need to remain editable. Do not invent multiple new rope powers.
+
+### Anchor
+
+An Anchor protects an animal from the current for one round.
+
+After its protection expires, it no longer protects the animal. Make the duration visible.
+
+Frogs cannot use Anchors.
+
+## 11. Power Cards
+
+Power Cards are bought face-down. The player does not know which card they will receive until they draw it.
+
+The cost is **4 resources in any combination**, using the available resource types. Buying a Power Card uses an action.
+
+The current design has a limit of one Power Card played per player per round.
+
+Create a deck containing the following 12 card types. Use three copies of most cards, with two copies each of River Shift and Whirlpool, giving 34 cards in total.
+
+1. **Tow** — Move one of your animals up to 2 spaces forward. Timing: during your turn.
+2. **Pull** — Move another player's animal up to 2 spaces sideways. Timing: during your turn.
+3. **Redirect** — Change the direction of the current on one occupied tile for this round. Timing: before the Current Phase.
+4. **Surge** — Increase one tile's current by 2 for this round. Timing: before the Current Phase.
+5. **River Shift** — Swap the hidden current tokens of two river tiles. Timing: before the Current Phase.
+6. **Whirlpool** — Force one animal on a Whirlpool to roll again. Timing: when that Whirlpool is resolved.
+7. **Calm Water** — Reduce one current by 2 for this round. Timing: before the Current Phase.
+8. **Push** — Move one opponent's animal one space forward or backward. Timing: during your turn.
+9. **Rescue** — Move one of your animals onto an adjacent island. Timing: during your turn.
+10. **Free Resources** — Choose two different resources and gain one of each. Timing: during your turn.
+11. **Double Move** — Give one animal an additional 2 movement points this turn. Timing: during your turn.
+12. **Current Shield** — One animal ignores its current during the next Current Phase.
+
+Rules for the deck:
+
+- Keep card effects and timing in a central card-data file.
+- Show a card's timing clearly.
+- Only allow cards to be played during their permitted timing window.
+- Most cards are played during the owner's turn, but cards that specifically say they are played before the Current Phase or when a Whirlpool resolves can be used at those times.
+- Enforce the one-card-per-player-per-round limit.
+- Allow cards and their costs to be edited.
+- Keep track of discarded and remaining cards.
+- Do not let a player use a card they do not own.
+- Do not let card effects create infinite movement or invalid board states.
+
+## 12. Missions
+
+Mission Cards give bonus points for completing secret objectives.
+
+Implement a mission deck, allow each player to receive a secret mission and track its completion during the game.
+
+At the end of Round 10, award the correct bonus points for completed missions.
+
+The exact mission list and final bonus values have not been fully finalised. Create a data-driven mission system with a small set of clearly labelled provisional missions, configurable objectives and editable point values.
+
+Make it easy to add, remove or edit missions without changing the main game engine.
+
+Keep each player's mission private in hot-seat mode if practical. If privacy cannot be guaranteed on one shared screen, show a private-view step so each player can inspect their mission before the next player continues.
+
+## 13. Secret role twist
+
+At the end of Round 5, introduce a secret role system.
+
+Exactly one player receives a special role per game. The other players receive normal role cards. Select the special role randomly from:
+
+- Saboteur
+- Hoarder
+- Champion
+
+Deal the role privately. The identity must remain secret until the end of Round 10.
+
+### Hoarder
+
+At the end of Round 10, if the Hoarder has more total resources than every other player, award a bonus of 6 points.
+
+The Hoarder must also have at least two animals across the river to qualify.
+
+If the Hoarder does not have a unique lead in resources, no bonus is awarded.
+
+### Champion
+
+At the end of Round 10, if the Champion has more animals across the river than every other player, award a bonus of 6 points.
+
+The Champion must also have at least two animals across the river to qualify.
+
+If the Champion does not have a unique lead in animals across, no bonus is awarded.
+
+### Saboteur
+
+The Saboteur secretly disrupts opponents but must still get at least two animals across the river.
+
+The precise Saboteur powers are not finalised. Build the role framework so its powers can be configured. Do not invent a large collection of extra abilities. Start with a small, clearly labelled provisional ability that can be enabled, disabled or edited.
+
+Reveal all roles at the end of Round 10 and display whether their conditions were met.
+
+The roles are a prototype feature and must be switchable off for games that do not use them.
+
+## 14. Scoring and winning
+
+The basic scoring rule is:
+
+- Each animal that reaches the bottom bank scores 1 point.
+- Completed missions provide additional points.
+- The Hoarder and Champion may earn their conditional 6-point role bonuses.
+- The Saboteur's scoring must be based on the ordinary scoring rules unless a specific additional rule is configured.
+
+The game ends after the Current Phase of Round 10.
+
+Show a final scoreboard containing:
+
+- Animals that reached the bottom bank.
+- Points from animals.
+- Mission points.
+- Secret-role bonus points.
+- Total score.
+- Winning faction.
+- A clear explanation of any tie.
+
+Make the scoring rules configurable.
+
+Do not automatically assume that an animal crossing the finish is removed from play in a way that affects scoring or future effects unless that rule is explicitly configured. Implement a clear default and document it.
+
+## 15. Computer-controlled opponents
+
+I want to be able to play alone.
+
+Implement three basic computer opponents for a four-player game. They do not need advanced artificial intelligence, but they must make legal, sensible decisions and finish a full game without getting stuck.
+
+The AI should be able to:
+
+- Move animals toward the bottom bank.
+- Prefer safer routes when appropriate.
+- Use islands where helpful.
+- Collect resources.
+- Buy equipment or Power Cards when useful.
+- Use Power Cards legally.
+- Consider the current phase and relevant faction abilities.
+- Make reasonable decisions about dams and anchors.
+- Pursue missions and role objectives when known to that AI player.
+- Avoid actions that do nothing or cause invalid board states.
+
+Add AI difficulty settings if straightforward: Easy, Normal and Hard.
+
+AI turns should be fast, and I should be able to inspect their actions in the game log.
+
+For local hot-seat mode, let the user control every faction instead.
+
+## 16. User interface
+
+Make the app feel like a proper digital board game, not a spreadsheet.
+
+The main screen should show:
+
+- The river board.
+- The four faction panels.
+- Animal counts and positions.
+- Current round and current phase.
+- Active player.
+- Remaining movement points and actions.
+- Resource totals.
+- Equipment owned and placed.
+- Power Cards in hand.
+- Secret mission information.
+- Current strengths and which currents have been discovered.
+- A clear button to end the turn.
+- A clear button to resolve the Current Phase when appropriate.
+- A visible game log.
+- A settings/rules panel.
+
+Use a river-themed visual design, readable labels and clear faction colours. Make sure the board remains usable on a normal desktop screen.
+
+When selecting an animal or tile, display its available actions and relevant rules.
+
+Do not hide important rules behind unexplained icons.
+
+Provide a pause option, restart option and confirmation before abandoning a game.
+
+## 17. Rules editor and balance testing
+
+This is one of the most important parts of the app.
+
+Create a rules editor that allows me to change:
+
+- Game length.
+- Faction movement values and abilities.
+- Starting animal counts.
+- Current strength distribution.
+- Island and Whirlpool locations.
+- Resource production.
+- Starting resources, if used.
+- Equipment costs.
+- Power Card costs and effects.
+- Mission objectives and points.
+- Secret-role bonuses and conditions.
+- Distraction rules.
+- Current resolution order.
+- AI difficulty.
+- Number of players and whether opponents are human or AI.
+
+Store the editable rules in one central configuration structure.
+
+Provide buttons to:
+
+- Restore the default rules.
+- Save my custom rules.
+- Start a new game with the selected rules.
+- Export rules as a JSON file.
+- Import a previously saved rules JSON file.
+
+If I change a rule mid-game, warn me if it could affect the current game state.
+
+## 18. Playtesting and diagnostics
+
+Build tools that help me discover whether the game is balanced.
+
+Include:
+
+- A full event log.
+- A record of every animal crossing.
+- Resource income and spending totals.
+- Power Cards drawn and played.
+- Current movement totals.
+- Animals lost, stuck or unable to progress, if applicable.
+- Round-by-round faction scores.
+- Final scoring breakdown.
+- A way to export a completed game's event log and results as JSON or CSV.
+- A quick restart and replay option.
+
+Where possible, make random outcomes reproducible using a configurable random seed. Show the seed in the game summary so I can reproduce unusual games.
+
+Add automated tests for core rules, including:
+
+- Movement limits.
+- Round progression.
+- Current resolution.
+- Dam effects and destruction.
+- Anchor duration.
+- Duck and Swan abilities.
+- Frog extra actions.
+- Beaver discounts.
+- Power Card timing and limits.
+- Whirlpool resolution.
+- Mission scoring.
+- Secret-role eligibility.
+- Round 10 scoring.
+- AI turns and game completion.
+
+## 19. Important rules-development policy
+
+Some details of Dam It are still being developed.
+
+Do not pretend that every provisional rule is final.
+
+Separate the rules into:
+
+1. Established rules supplied in this prompt.
+2. Provisional rules used to make the prototype playable.
+3. Open questions that need my decision.
+
+For each provisional rule, record its default, explain it briefly in the in-app rules reference and make it editable where practical.
+
+Do not stop building simply because a rule is undecided. Choose a simple, reversible default and continue. Ask me only when a decision is genuinely necessary to make the app work.
+
+Do not add extra game mechanics just because they sound fun. The goal is to test the game we have designed, not to replace it with a different game.
+
+## 20. Technical quality
+
+- Use clear TypeScript types for players, animals, tiles, cards, resources, equipment, missions and roles.
+- Keep game logic separate from the interface.
+- Avoid one enormous component containing all game rules.
+- Validate every player action before applying it.
+- Prevent duplicated phase resolution, infinite loops and invalid positions.
+- Keep random effects testable.
+- Make saving and loading resilient to errors.
+- Do not silently discard game progress.
+- Add an in-app rules reference and a short README.
+- Make sure the app can be run again after I close the browser or restart my computer.
+- Do not claim that something works unless you have tested it.
+
+## 21. Build and delivery instructions
+
+Work in this order:
+
+1. Inspect the project folder.
+2. Create the working app structure.
+3. Implement the core board, factions, turns and 10-round game loop.
+4. Implement the current phase and movement.
+5. Implement resources, equipment and Power Cards.
+6. Implement missions and secret roles.
+7. Implement AI opponents and hot-seat mode.
+8. Implement the rules editor, save/load and playtesting reports.
+9. Run the app and fix errors.
+10. Run automated tests and fix failures.
+11. Play through at least one complete simulated game if possible.
+12. Tell me exactly how to start the app and play my first game.
+
+Do not stop after step 1 or return only a plan. Continue implementing until the playable prototype is working.
+
+If you cannot finish every advanced feature in one pass, deliver a working core game first, then continue with the remaining features. Clearly tell me what is implemented, what is provisional and what remains unfinished.
+
+At the end, give me the exact terminal commands I need to run, the local URL to open, how to start a game against three AI opponents, how to start a hot-seat game and how to change the rules.
+
+My goal is to play Dam It repeatedly, discover what is broken or unbalanced, and improve the game based on actual results.
