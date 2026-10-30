@@ -3,15 +3,18 @@
 // action, equipment, Power Cards and ending the turn.
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
+import { useState } from 'react'
+
 import { cardById } from '../game/cards'
 import { assessCurrent } from '../game/current'
 import { activePlayer, canAfford, equipmentCost, totalResources } from '../game/engine'
 import type { GameAction } from '../game/engine'
 import { coord, describeTile } from '../game/movement'
+import { collectorsLeft } from '../game/production'
 import { COLLECTOR_AREAS } from '../game/rules'
 import type { Animal, EquipmentId, GameState, Player, ResourceId } from '../game/types'
 import { EQUIPMENT_IDS, RESOURCE_IDS, RESOURCE_LABELS } from '../game/types'
-import { bg, equipmentArt, resourceArt } from './art'
+import { bg, equipmentArt, factionArt, resourceArt } from './art'
 import { startCardTargeting, targetingPrompt, type Targeting } from './targeting'
 
 export interface TurnPanelProps {
@@ -34,32 +37,34 @@ export function TurnPanel(props: TurnPanelProps) {
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
 function ResourcePhasePanel({ state, dispatch }: TurnPanelProps) {
-  const waiting = state.players.filter(
-    (p) => p.collectorArea === null && p.controller === 'human',
+  const next = state.players.find(
+    (p) => p.controller === 'human' && collectorsLeft(state, p) > 0,
   )
-  const next = waiting[0]
+  const perPlayer = state.rules.production.collectorsPerPlayer
 
   return (
     <div className="panel">
       <header>Phase A - Collectors</header>
       <div className="body">
         <div className="hint" style={{ marginBottom: 10 }}>
-          Put each collector in a resource area. A production card is then turned over and says
-          what every area produces this round. Nobody sees the card before choosing.
+          You have {perPlayer} collectors. Put them in resource areas - spread them across two
+          areas, or stack both on one to double up on a hunch. A production card is then turned
+          over and says what one collector in each area brings back. Nobody sees it first.
         </div>
 
         {state.players.map((player) => (
           <div key={player.id} className="row" style={{ marginBottom: 6 }}>
             <span style={{ width: 76, fontSize: 13 }}>{player.name}</span>
-            {player.collectorArea ? (
-              <span className={`res ${player.collectorArea}`}>
-                <span className="swatch" style={bg(resourceArt(player.collectorArea))} />
-                {RESOURCE_LABELS[player.collectorArea]}
+            {player.collectors.map((area, index) => (
+              <span key={`${area}-${index}`} className={`res ${area}`}>
+                <span className="swatch" style={bg(resourceArt(area))} />
+                {RESOURCE_LABELS[area]}
               </span>
-            ) : player.controller === 'ai' ? (
-              <span className="faint">choosing...</span>
-            ) : (
-              <span className="faint">waiting</span>
+            ))}
+            {collectorsLeft(state, player) > 0 && (
+              <span className="faint">
+                {player.controller === 'ai' ? 'choosing...' : 'waiting'}
+              </span>
             )}
           </div>
         ))}
@@ -67,7 +72,7 @@ function ResourcePhasePanel({ state, dispatch }: TurnPanelProps) {
         {next && (
           <>
             <div className="section-title" style={{ marginTop: 14 }}>
-              {next.name}, choose an area
+              {next.name}, place collector {next.collectors.length + 1} of {perPlayer}
             </div>
             <div className="row wrap">
               {COLLECTOR_AREAS.map((area) => (
@@ -85,6 +90,22 @@ function ResourcePhasePanel({ state, dispatch }: TurnPanelProps) {
                 </button>
               ))}
             </div>
+            {next.collectors.length > 0 && (
+              <div className="row wrap" style={{ marginTop: 8 }}>
+                <span className="faint">Changed your mind?</span>
+                {next.collectors.map((area, index) => (
+                  <button
+                    key={`undo-${area}-${index}`}
+                    className="btn tiny ghost"
+                    onClick={() =>
+                      dispatch({ type: 'remove-collector', playerId: next.id, index })
+                    }
+                  >
+                    Take back {RESOURCE_LABELS[area]}
+                  </button>
+                ))}
+              </div>
+            )}
           </>
         )}
 
@@ -169,6 +190,12 @@ function PlayerTurnPanel({
 
         <div className="section-title">Build and buy (uses your action)</div>
         <Shop state={state} player={player} dispatch={dispatch} />
+
+        <DistractionControls
+          state={state}
+          player={player}
+          setTargeting={setTargeting}
+        />
 
         <DamControls state={state} player={player} dispatch={dispatch} />
 
@@ -268,12 +295,6 @@ function SelectedAnimal({
         <div style={{ marginTop: 2 }}>{assessment.reasons.join(' ')}</div>
       </div>
 
-      {animal.distracted && (
-        <div className="error" style={{ marginTop: 6 }}>
-          Distracted this turn and cannot move.
-        </div>
-      )}
-
       <div className="row wrap" style={{ marginTop: 8 }}>
         {player.equipment.raft > 0 && (
           <button
@@ -311,6 +332,123 @@ function SelectedAnimal({
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
+/** "a dam", but "an anchor". Only ever used on the four equipment names. */
+function article(word: string): string {
+  return 'aeiou'.includes(word[0]) ? 'an' : 'a'
+}
+
+/**
+ * What each piece of equipment actually does, in the player's own numbers. Built from the
+ * rules rather than written out, so editing a distance in the rules editor changes the
+ * explanation too and the two can never disagree.
+ */
+function equipmentInfo(state: GameState, item: EquipmentId): string[] {
+  const rules = state.rules
+  const fx = rules.equipmentEffects
+  const lines: string[] = []
+
+  if (item === 'dam') {
+    const axis = rules.dam.calmAxis === 'vertical' ? 'above and below' : 'either side of'
+    lines.push(
+      `Place it on a river tile. It calms the water ${axis} it, within ` +
+        `${rules.dam.calmRadius} ${rules.dam.calmRadius === 1 ? 'square' : 'squares'}` +
+        `${rules.dam.calmsOwnTile ? ', including its own square' : ''}.`,
+      'An animal in calmed water ignores the current completely that round.',
+    )
+    if (rules.dam.exclusionsPerRound > 0) {
+      lines.push('You may bar one animal a round from its shelter, so it only helps who you ' +
+        'want it to help.')
+    }
+    lines.push(
+      'It stays until somebody destroys it. When it goes, anything just downstream is ' +
+        `swept ${rules.dam.sweepDistance} squares.`,
+    )
+  }
+
+  if (item === 'raft') {
+    lines.push(
+      `Moves one of your animals ${fx.raftDistance} ` +
+        `${fx.raftDistance === 1 ? 'square' : 'squares'} straight toward the far bank.`,
+      'It spends no movement points, so it is progress on top of your normal 3.',
+      'Single use: the raft is gone once you use it.',
+    )
+  }
+
+  if (item === 'rope') {
+    lines.push(
+      `Pulls one of your animals up to ${fx.ropeDistance} squares toward another of your ` +
+        `animals, as long as the two are within ${fx.ropeRange} squares of each other.`,
+      'The way out of a bad tile when you have no movement left, or a way to gather a group.',
+      'Single use. Frogs cannot use ropes.',
+    )
+  }
+
+  if (item === 'anchor') {
+    const rounds = fx.anchorRounds
+    lines.push(
+      `The animal ignores the current entirely for ${rounds} ` +
+        `${rounds === 1 ? 'round' : 'rounds'}, however strong it is.`,
+      'The answer to sitting on a 4 you cannot get off, or to holding a good square.',
+      'Single use. Frogs cannot use anchors.',
+    )
+  }
+
+  const equipment = rules.equipment[item]
+  lines.push(
+    equipment.purchaseUsesAction
+      ? 'Building it uses your one action for the turn.'
+      : 'Building it is free and does not use your action.',
+  )
+  lines.push(
+    equipment.useUsesAction
+      ? 'Using it later uses an action as well.'
+      : 'Using it later is free, because buying it already cost you the action.',
+  )
+  return lines
+}
+
+function EquipmentInfo({
+  state,
+  item,
+  onClose,
+}: {
+  state: GameState
+  item: EquipmentId
+  onClose: () => void
+}) {
+  const cost = state.rules.equipment[item].cost
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal small" onClick={(event) => event.stopPropagation()}>
+        <header>
+          <span className="kit-icon big" style={bg(equipmentArt(item))} />
+          <h2 style={{ textTransform: 'capitalize' }}>{item}</h2>
+          <span className="spacer" />
+          <button className="btn ghost" onClick={onClose}>
+            Close
+          </button>
+        </header>
+        <div className="body">
+          <div className="row wrap" style={{ marginBottom: 10 }}>
+            <span className="faint">Full price</span>
+            {RESOURCE_IDS.filter((id) => cost[id] > 0).map((id) => (
+              <span key={id} className={`res ${id}`}>
+                <span className="swatch" style={bg(resourceArt(id))} />
+                {cost[id]} {RESOURCE_LABELS[id]}
+              </span>
+            ))}
+          </div>
+          <ul className="rules-list">
+            {equipmentInfo(state, item).map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /**
  * Spells out what a player is short of, rather than leaving a disabled button and a
  * tooltip saying only "not enough resources". Returns null when the cost is met.
@@ -332,9 +470,11 @@ function Shop({
   dispatch: (action: GameAction) => boolean
 }) {
   const faction = state.rules.factions[player.factionId]
+  const [info, setInfo] = useState<EquipmentId | null>(null)
 
   return (
     <div>
+      {info && <EquipmentInfo state={state} item={info} onClose={() => setInfo(null)} />}
       {EQUIPMENT_IDS.filter((id) => state.rules.equipment[id].enabled).map((item) => {
         const cost = equipmentCost(state.rules, player.factionId, item)
         const forbidden = faction.forbiddenEquipment.includes(item)
@@ -361,6 +501,14 @@ function Shop({
                     -{faction.buildDiscount}
                   </span>
                 )}
+                <button
+                  className="info-btn"
+                  onClick={() => setInfo(item)}
+                  title={`What does ${article(item)} ${item} do?`}
+                  aria-label={`What does ${article(item)} ${item} do?`}
+                >
+                  ?
+                </button>
               </div>
               <div className="cost">
                 {RESOURCE_IDS.filter((id) => cost[id] > 0).map((id) => (
@@ -378,7 +526,7 @@ function Shop({
             <button
               className="btn small"
               disabled={forbidden || !affordable || noAction}
-              title={blocked ?? `Build a ${item}`}
+              title={blocked ?? `Build ${article(item)} ${item}`}
               onClick={() => dispatch({ type: 'buy-equipment', item: item as EquipmentId })}
             >
               Build
@@ -419,6 +567,161 @@ function Shop({
           </div>
         )
       })()}
+    </div>
+  )
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+function DistractionControls({
+  state,
+  player,
+  setTargeting,
+}: {
+  state: GameState
+  player: Player
+  setTargeting: (targeting: Targeting) => void
+}) {
+  const rules = state.rules.distraction
+  if (!rules.enabled) return null
+
+  const noAction = rules.playUsesAction && player.actionsRemaining <= 0
+  const blocked = player.distractionTokens <= 0
+    ? 'You have already used your Distraction token'
+    : noAction
+      ? 'No action left this turn'
+      : null
+
+  return (
+    <>
+      <div className="section-title">Distraction</div>
+      <div className={`shop-item${blocked ? ' unaffordable' : ''}`}>
+        <div className="info">
+          <div className="label">
+            Distraction token
+            <span className="tag" style={{ marginLeft: 6 }}>
+              {player.distractionTokens} left
+            </span>
+          </div>
+          <div className="cost">
+            <span className="faint">
+              Drop it on a river tile. Every animal within {rules.radius} squares, yours
+              included, rolls a d{rules.dieSides}: {rules.avoidOnRoll - 1} or less and it
+              looks away. Ducks need a {rules.hardAvoidOnRoll}. You then drag each
+              distracted animal up to {rules.pullDistance} squares toward the token.
+            </span>
+          </div>
+          {blocked && <div className="blocked">{blocked}</div>}
+        </div>
+        <button
+          className="btn small"
+          disabled={blocked !== null}
+          title={blocked ?? 'Choose a river tile to drop it on'}
+          onClick={() => setTargeting({ kind: 'distraction' })}
+        >
+          Play
+        </button>
+      </div>
+    </>
+  )
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * The panel that appears once a Distraction token has landed and its dice have been rolled.
+ * Every caught animal gets its own slider, because dragging an opponent is usually worth the
+ * full distance while dragging your own animal rarely is, and the rule is "up to".
+ */
+export function DistractionResolution({
+  state,
+  dispatch,
+}: {
+  state: GameState
+  dispatch: (action: GameAction) => boolean
+}) {
+  const pending = state.pendingDistraction
+  const max = state.rules.distraction.pullDistance
+  const [moves, setMoves] = useState<Record<string, number>>({})
+
+  if (!pending) return null
+  const placer = state.players.find((p) => p.id === pending.placerId)
+  if (!placer || placer.controller !== 'human') return null
+
+  const caught = pending.rolls.filter((roll) => roll.distracted)
+  const missed = pending.rolls.length - caught.length
+  const distanceFor = (animalId: string) => moves[animalId] ?? max
+
+  return (
+    <div className="panel">
+      <header>Distraction at {coord(pending.col, pending.row)}</header>
+      <div className="body">
+        <div className="hint" style={{ marginBottom: 10 }}>
+          {pending.rolls.length} {pending.rolls.length === 1 ? 'animal' : 'animals'} were in
+          range. {caught.length} looked away and {missed} did not. Choose how far to draw each
+          distracted animal toward the token - up to {max} squares, or leave it where it is.
+        </div>
+
+        {caught.length === 0 && (
+          <div className="faint" style={{ marginBottom: 10 }}>
+            Nobody was caught. The token is spent either way.
+          </div>
+        )}
+
+        {caught.map((roll) => {
+          const animal = state.animals.find((a) => a.id === roll.animalId)
+          const owner = state.players.find((p) => p.id === roll.playerId)
+          const mine = roll.playerId === placer.id
+          if (!animal) return null
+          return (
+            <div key={roll.animalId} className="shop-item">
+              <div className="info">
+                <div className="label">
+                  <span
+                    className={`pip ${roll.factionId}`}
+                    style={bg(factionArt(roll.factionId))}
+                  />
+                  {owner?.name ?? roll.factionId} at {coord(animal.col, animal.row)}
+                  {mine && <span className="tag" style={{ marginLeft: 6 }}>yours</span>}
+                </div>
+                <div className="cost">
+                  <span className="faint">
+                    Rolled {roll.roll}, needed {roll.neededRoll}
+                  </span>
+                </div>
+              </div>
+              <div className="row">
+                {Array.from({ length: max + 1 }, (_, n) => (
+                  <button
+                    key={n}
+                    className={`btn tiny${distanceFor(roll.animalId) === n ? ' primary' : ''}`}
+                    onClick={() => setMoves({ ...moves, [roll.animalId]: n })}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+
+        <button
+          className="btn primary"
+          style={{ width: '100%', marginTop: 12 }}
+          onClick={() => {
+            dispatch({
+              type: 'resolve-distraction',
+              moves: caught.map((roll) => ({
+                animalId: roll.animalId,
+                distance: distanceFor(roll.animalId),
+              })),
+            })
+            setMoves({})
+          }}
+        >
+          {caught.length === 0 ? 'Carry on' : 'Draw them in'}
+        </button>
+      </div>
     </div>
   )
 }

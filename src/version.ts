@@ -1,4 +1,4 @@
-export const VERSION = '0.02'
+export const VERSION = '0.03'
 
 export interface ChangelogEntry {
   version: string
@@ -8,6 +8,25 @@ export interface ChangelogEntry {
 
 // Newest first.
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.03',
+    date: '2026-10-30',
+    notes: [
+      'Only 5 currents start face up. Every other tile is face down until an animal '
+        + 'stands on it.',
+      'Nearly every tile now flows, and each one has its own direction: about half push '
+        + 'sideways, a quarter forward and a quarter back. A current of 4 is always sideways.',
+      'Two collectors each, placed in two areas or stacked on one, and each is paid '
+        + 'separately.',
+      'Production cards pay every area at least 1, and the card is shown in full all round.',
+      'Distraction tokens: one each, played on a river tile. Everything within 3 squares '
+        + 'rolls a d6, Ducks need a 6, and you drag whoever looks away up to 3 squares in.',
+      'Secret roles are parked for now. They can be switched back on in the rules editor.',
+      'Every piece of equipment has a "?" that says exactly what it does before you buy it.',
+      'Because so many defaults moved, this build starts from a clean set of rules: a game '
+        + 'or a tuned ruleset saved under v0.02 is not carried over.',
+    ],
+  },
   {
     version: '0.02',
     date: '2026-10-29',

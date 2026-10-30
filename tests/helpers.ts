@@ -12,8 +12,11 @@ import { FACTION_IDS } from '../src/game/types'
 export interface TestGameOptions {
   /** Every river tile gets this current strength. */
   currentStrength?: number
-  /** Nothing is hidden by default, so tests do not have to reveal tiles first. */
-  hiddenFraction?: number
+  /** Weights for left, right, forward and back. Defaults to every tile running right. */
+  directionWeights?: number[]
+  sidewaysOnlyFrom?: number
+  /** Everything is face up by default, so tests do not have to reveal tiles first. */
+  visibleCurrents?: number
   islands?: GameRules['board']['islands']
   whirlpools?: GameRules['board']['whirlpools']
   seed?: string
@@ -27,7 +30,11 @@ export function makeGame(options: TestGameOptions = {}): GameState {
   // A weight array with a single non-zero entry makes every river tile that strength.
   rules.board.currentStrengthWeights = [0, 0, 0, 0, 0]
   rules.board.currentStrengthWeights[strength] = 1
-  rules.board.hiddenCurrentFraction = options.hiddenFraction ?? 0
+  // Likewise for direction: tests that care about the push want it to run one known way.
+  rules.board.currentDirectionWeights = options.directionWeights ?? [0, 1, 0, 0]
+  rules.board.sidewaysOnlyFromStrength = options.sidewaysOnlyFrom ?? 4
+  // Everything face up unless a test is specifically about hidden water.
+  rules.board.visibleCurrents = options.visibleCurrents ?? Number.MAX_SAFE_INTEGER
   rules.board.islands = options.islands ?? []
   rules.board.whirlpools = options.whirlpools ?? []
   rules.ai.stepDelayMs = 0
@@ -73,12 +80,14 @@ export function put(state: GameState, animal: Animal, col: number, row: number):
   placeAnimal(state, animal, col, row)
 }
 
-/** Takes every player past the Resource Phase, with collectors in a fixed area. */
+/** Takes every player past the Resource Phase, with every collector in a fixed area. */
 export function startPlayerTurns(state: GameState): GameState {
   let current = state
+  const perPlayer = current.rules.production.collectorsPerPlayer
   for (const player of current.players) {
-    if (player.collectorArea !== null) continue
-    current = must(current, { type: 'place-collector', playerId: player.id, area: 'wood' })
+    for (let i = player.collectors.length; i < perPlayer; i += 1) {
+      current = must(current, { type: 'place-collector', playerId: player.id, area: 'wood' })
+    }
   }
   return must(current, { type: 'resolve-production' })
 }

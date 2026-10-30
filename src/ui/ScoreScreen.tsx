@@ -26,6 +26,8 @@ export function ScoreScreen({
     result.winningPlayerIds.includes(b.playerId),
   )
   const ordered = [...result.breakdowns].sort((a, b) => b.total - a.total)
+  // Roles are parked, so the two columns they fill are dropped rather than left empty.
+  const showRoles = state.rules.roles.enabled
 
   return (
     <div className="overlay">
@@ -60,8 +62,8 @@ export function ScoreScreen({
                 <th className="num">Animal pts</th>
                 <th>Mission</th>
                 <th className="num">Mission pts</th>
-                <th>Secret role</th>
-                <th className="num">Role pts</th>
+                {showRoles && <th>Secret role</th>}
+                {showRoles && <th className="num">Role pts</th>}
                 <th className="num">Total</th>
               </tr>
             </thead>
@@ -87,13 +89,15 @@ export function ScoreScreen({
                     )}
                   </td>
                   <td className="num">{row.missionPoints}</td>
-                  <td>
-                    {ROLE_LABELS[row.roleId ?? 'none']}
-                    {row.roleId && row.roleId !== 'none' && (
-                      <div className="faint">{row.roleExplanation}</div>
-                    )}
-                  </td>
-                  <td className="num">{row.roleBonus}</td>
+                  {showRoles && (
+                    <td>
+                      {ROLE_LABELS[row.roleId ?? 'none']}
+                      {row.roleId && row.roleId !== 'none' && (
+                        <div className="faint">{row.roleExplanation}</div>
+                      )}
+                    </td>
+                  )}
+                  {showRoles && <td className="num">{row.roleBonus}</td>}
                   <td className="num total-cell">{row.total}</td>
                 </tr>
               ))}

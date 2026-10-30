@@ -17,9 +17,15 @@ Taken from the brief and from the printed components in this folder.
 - 1 point per animal that reaches the far bank. Missions and secret roles add more.
 - The river runs left to right. Animals cross it top to bottom.
 - The starter map is 10 tiles wide and 7 rows deep.
-- Current strengths are 0 to 4, with 4 rare. The default mix is the printed tile sheet's own
+- Current strengths are 0 to 4. Nearly every tile flows, and each one carries its own
+  direction as well as its own strength. The default strength mix is weighted from the printed
+  tile sheet's own
   count: 46 plain, 12 of strength 1, 16 of strength 2, 8 of strength 3 and a single 4.
-- Some currents are hidden and are revealed when an animal enters the tile, and stay revealed.
+- Only 5 currents start face up. Every other tile is face down until an animal enters it, and
+  then it stays turned over for everybody.
+- Each player places 2 collectors in Phase A, in two areas or stacked on one, and each is paid
+  separately. Every production card pays every area at least 1.
+- Every player has 1 Distraction token for the game.
 
 **Factions**
 
@@ -74,14 +80,16 @@ Chosen so the game is playable. Each is deliberately simple and reversible.
 | Whirlpool distance | 1 square | No distance is printed. One is the cautious choice. | `whirlpool.distance` |
 | Whirlpool odds | equal thirds | Matches the printed "left, right or forward" with nothing to suggest a bias. | `whirlpool.weight*` |
 | Whirlpool trigger | where the animal ends up | Simplest reading of "each animal is affected once per phase". | `whirlpool.trigger` |
-| Hidden currents | 35% of moving water | Nothing printed says how many. Only tiles above strength 0 can be hidden, since still water has nothing to hide. | `board.hiddenCurrentFraction` |
+| Currents face up at the start | 5 | Nothing printed says how many. Only tiles above strength 0 can be hidden, since still water has nothing to hide, and islands and whirlpools are printed tiles so they stay face up. | `board.visibleCurrents` |
+| Current direction mix | half sideways, a quarter forward, a quarter back | Asked for directly, to make the river push animals around rather than only along. | `board.currentDirectionWeights` |
+| Strength 4 is sideways only | yes | A forward 4 is most of a free crossing and a backward 4 undoes most of a game's work. | `board.sidewaysOnlyFromStrength` |
+| Collectors per player | 2 | Asked for directly. They may share an area, and each is paid in full. | `production.collectorsPerPlayer` |
 | Dam calms | its own square plus 1 above and 1 below | The card says "above and below the dam". On a board where the river runs left to right, that reads as the squares up and down the board. The axis is switchable. | `dam.calmAxis`, `dam.calmRadius` |
 | Destroying a dam | 2 Stone | The brief says this was discussed as 2 or 3 and never settled. | `dam.destroyCost` |
 | Islands shelter from the current | yes | The printed rules say islands are "not automatically safe", which is ambiguous. | `board.islandsBlockCurrent` |
 | Using equipment | free | Buying it already cost the action. Only buying costs one. | `equipment.*.useUsesAction` |
-| Distraction | off | The Ducks card says they must roll 6 to avoid it; the brief asks for it to stay optional until confirmed. When on, it distracts one random Duck for the turn on a roll below 6. | `distraction.*` |
-| Saboteur ability | strengthen one tile by 1, once a round, before the current | The brief says the powers are not finalised and asks for something small. The log does not name who did it. | `roles.saboteur.*` |
-| Saboteur scoring | 6 points for 2 animals across | No separate condition is given. | `roles.*` |
+| Distraction tokens | on, 1 each | Played on a river tile for your action. Everything within 3 squares rolls a d6, the placer's own animals included: 4 or more and it keeps its head, Ducks need a 6. The placer then drags each distracted animal up to 3 squares toward the token, choosing the distance for each one. | `distraction.*` |
+| Secret roles | off | Parked rather than deleted. The Saboteur's powers and scoring were never settled, so the game is being tested without them. Switching it back on restores the whole mechanic, and the tests still cover it. | `roles.enabled` |
 | Production deck | 24 cards, 12 kinds, 2 each | The brief says the distribution is not settled. Yields average about 1.5 per area with real variance. | `production.cards` |
 | Collector sharing | no penalty | Nothing printed says sharing an area costs anything. | `production.sharingPenalty` |
 | Starting resources | none | Nothing says players start with any. | `game.startingResources` |
@@ -108,56 +116,66 @@ all of them are listed in the app under **How to play > Open questions**.
    Market loses an area.
 2. **Four islands or five?** The brief says four, the printed map draws five.
 3. **Does destroying a dam cost 2 Stone or 3?**
-4. **What does the Saboteur actually do, and how does it score?** As built it is the easiest of
-   the three roles: it gets the same 6 points for the same 2 animals across, without needing to
-   lead at anything. Hoarder and Champion both need an outright lead.
-5. **Is Distraction in the game?** And if so, does it hit one Duck or the whole flock? Ten
-   ducks all distracted on a 5-in-6 chance would be brutal.
-6. **Does using a raft, rope or anchor cost an action, or only buying it?**
-7. **Is sideways displacement enough of a threat?** See the numbers below.
-8. **Does a raft or a rope count as a "structure" for the Builder mission?**
+4. **Are secret roles coming back?** They are parked, not deleted. If they return, the
+   Saboteur still needs a power and a scoring condition: as built it was the easiest of the
+   three, taking the same 6 points for the same 2 animals across without leading at anything.
+5. **Should a Distraction token spare your own animals?** At the moment everything within 3
+   squares rolls, the placer's own included, and where you drop it is the whole skill of it.
+6. **Should a token be able to pull a rival forward?** The drag is always toward the token, so
+   one dropped ahead of somebody helps them. Dropped on row 1 in round 1 it catches almost
+   every animal on the bank and pushes the lot into the river. The per-animal "up to 3" choice
+   means a bad catch can be left alone, but the forward pull is still available on purpose.
+7. **Does using a raft, rope or anchor cost an action, or only buying it?**
+8. **Is the direction mix right?** Half sideways, a quarter forward, a quarter back. A quarter
+   of the river actively undoing progress may be too punishing, or not punishing enough.
+9. **Are 5 face-up currents too few** on a river 7 rows deep, when the only way to learn a
+   tile is to put an animal on it?
+10. **Does a raft or a rope count as a "structure" for the Builder mission?**
 
 ---
 
 ## What the numbers say
 
-From `pnpm sim -- --games 300`, default rules, Normal opponents. Raw data in
+From `pnpm sim -- --games 300`, v0.03 rules, Normal opponents. Raw data in
+`docs/balance/v0.03.csv`. The v0.02 run it is being compared against is in
 `docs/balance/baseline.csv`.
 
-**The factions are close.** Win rates 19/19/19/24, scores 3.75 to 4.42. Beavers are a little
-ahead, which their 5.9 structures against everyone else's 3.9 explains. Nothing here looks
-broken.
+| Faction | Win % | Score | Animals across | Mission % | Built | Carried by the current |
+|---|---|---|---|---|---|---|
+| Ducks | 20 | 5.07 | 3.53 | 35 | 7.5 | 17.3 |
+| Swans | 15 | 4.87 | 3.67 | 28 | 7.4 | 6.4 |
+| Frogs | 20 | 4.83 | 2.99 | 43 | 6.5 | 16.3 |
+| Beavers | 26 | 5.36 | 3.53 | 41 | 9.0 | 17.5 |
 
-**Three things are worth a look.**
+**Two of the three findings from v0.02 are fixed.**
 
-**1. Most animals never cross.** About 2.5 animals out of 8 to 10 reach the far bank. That is
-not the AI being poor, it is arithmetic: the river is 7 rows deep, so crossing costs 8 movement
-points, and a faction only gets 3 a round for 10 rounds. 30 points buys at most 3.75 crossings
-even if every single point goes into one animal at a time. Starting with 10 animals when the
-game can only move 3 or 4 of them makes most of the herd scenery.
+**Crossings are up, from about 2.5 to about 3.4.** A quarter of the river now pushes forward,
+so the current gives ground back as well as taking it, and an animal no longer depends only on
+its 3 movement a round. The depth-5 and 14-round experiments are no longer needed to make the
+race work.
 
-Two changes each raise crossings to about 4.3 to 4.8, tested over 150 games:
+**Power Cards are bought now**, where before it was 0.07 a game. Frogs buy about 3, everyone
+else under 1. Two collectors and a deck that pays every area roughly doubled income.
 
-- a 5-row river (`--set board.riverDepth=5`), in `docs/balance/depth-5.csv`
-- 14 rounds (`--set game.rounds=14`), in `docs/balance/rounds-14.csv`
+**Three things worth a look.**
 
-Raising movement to 4 would do the same thing. Worth deciding which lever you want, because it
-also decides how much the rest of the game has room to matter.
+**1. Swan resistance has quietly become a drawback.** Swans get the most animals across
+(3.67) and still win least (15%). They are carried by the current 6.4 times a game against
+everyone else's 17. Taking 1 off every current cancels most strength-1 tiles outright, and a
+quarter of those would have been pushing them *forward*. Resisting the river now means
+turning down free rides. It is a real consequence of the direction change and may want
+rebalancing, perhaps as resistance that only applies to currents that cost them ground.
 
-**2. The secret role is worth more than the race.** 6 points for a role, 4 or 5 for a mission,
-against about 2.5 points of animals across. A player who ignores the river and chases the role
-bonus is playing the stronger game. Either animals should be worth more, or the bonuses less.
+**2. There is more income than there is to spend it on.** A faction earns about 35 resources
+across ten rounds and spends 18 to 31 of it. Beavers finish with nearly half unspent. Costs
+that were tight at 13.5 resources a game are loose at 35, which is why Power Cards went from
+never to routine. Either the deck should pay less, or the costs should rise, or a second
+action a turn would give players something to do with it.
 
-**3. Power Cards are almost never bought.** 0.07 a game for most factions. Four resources is a
-large share of the roughly 13.5 a faction earns across ten rounds, and equipment competes
-directly for the same action. If the deck is meant to shape games, it needs to be cheaper, or
-the action it costs needs to be freer.
+**3. Beavers still lead**, at 26% against 15 to 20. Their discount is worth more now that
+there is more to buy, and they build 9 things a game against everyone else's 6.5 to 7.5.
 
-One smaller note: with no sharing penalty, where other players put their collectors never
-matters, so the collector placement is a private sum rather than a decision about anybody else.
-Setting `production.sharingPenalty` to 1 makes the Market contested.
-
-And a design observation rather than a finding: the current only ever pushes animals sideways,
-so it costs position but never progress. That makes the river a nuisance rather than a danger,
-and it is why anchors are rarely worth buying. It matches the brief exactly, so it has been
-left alone, but it is question 7 above.
+One smaller note, unchanged from v0.02: with no sharing penalty, where other players put their
+collectors never matters, so collector placement is still a private sum rather than a decision
+about anybody else. Setting `production.sharingPenalty` to 1 makes the Market contested - and
+it matters more now that there are two collectors each.

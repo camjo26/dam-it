@@ -8,7 +8,7 @@
 
 import { chooseAiAction } from './ai'
 import { activePlayer, applyAction } from './engine'
-import { allCollectorsPlaced } from './production'
+import { allCollectorsPlaced, collectorsLeft } from './production'
 import type { GameState } from './types'
 
 /** Total automatic steps allowed in one game before the loop is treated as stuck. */
@@ -25,10 +25,22 @@ export function hasHumanPlayers(state: GameState): boolean {
 export function autoStep(state: GameState): GameState | null {
   if (state.phase === 'finished') return null
 
+  // A Distraction token blocks every other action, so an AI's own token is cleared first.
+  // One placed by a person is left for them to resolve in the interface.
+  const pending = state.pendingDistraction
+  if (pending) {
+    const placer = state.players.find((p) => p.id === pending.placerId)
+    if (!placer || placer.controller !== 'ai') return null
+    const action = chooseAiAction(state, placer.id)
+    if (!action) return null
+    const result = applyAction(state, action)
+    return result.ok ? result.state : null
+  }
+
   if (state.phase === 'resource') {
     // AI collectors go down first.
     for (const player of state.players) {
-      if (player.controller !== 'ai' || player.collectorArea !== null) continue
+      if (player.controller !== 'ai' || collectorsLeft(state, player) === 0) continue
       const action = chooseAiAction(state, player.id)
       if (!action) continue
       const result = applyAction(state, action)

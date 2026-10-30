@@ -19,11 +19,12 @@ import { CurrentPhasePanel, CurrentReport } from './ui/CurrentPhase'
 import { Diagnostics } from './ui/Diagnostics'
 import { FactionPanels } from './ui/FactionPanels'
 import { LogPanel } from './ui/LogPanel'
+import { ProductionCard } from './ui/ProductionCard'
 import { RulesEditor } from './ui/RulesEditor'
 import { RulesReference } from './ui/RulesReference'
 import { ScoreScreen } from './ui/ScoreScreen'
 import { SetupScreen } from './ui/SetupScreen'
-import { TurnPanel } from './ui/TurnPanel'
+import { DistractionResolution, TurnPanel } from './ui/TurnPanel'
 import { targetingComplete, type Targeting } from './ui/targeting'
 import { VERSION } from './version'
 
@@ -107,7 +108,11 @@ export default function App() {
 
   const targetable = useMemo(() => {
     if (!state || !targeting) return []
-    if (targeting.kind === 'place-dam' || targeting.kind === 'saboteur') {
+    if (
+      targeting.kind === 'place-dam' ||
+      targeting.kind === 'saboteur' ||
+      targeting.kind === 'distraction'
+    ) {
       return state.board.tiles
         .filter((t) => t.kind !== 'bank-top' && t.kind !== 'bank-bottom')
         .map((t) => t.id)
@@ -221,6 +226,13 @@ export default function App() {
 
     if (targeting.kind === 'place-dam') {
       if (game.dispatch({ type: 'place-dam', col: tile.col, row: tile.row })) {
+        setTargeting(null)
+      }
+      return
+    }
+
+    if (targeting.kind === 'distraction') {
+      if (game.dispatch({ type: 'play-distraction', col: tile.col, row: tile.row })) {
         setTargeting(null)
       }
       return
@@ -383,6 +395,8 @@ export default function App() {
         </div>
 
         <div className="column">
+          <DistractionResolution state={state} dispatch={game.dispatch} />
+          <ProductionCard state={state} />
           <TurnPanel
             state={state}
             dispatch={game.dispatch}

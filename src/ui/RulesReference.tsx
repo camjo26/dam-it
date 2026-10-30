@@ -99,8 +99,11 @@ function HowToPlay({ rules }: { rules: GameRules }) {
       <div className="section-title">A round, in order</div>
       <ul className="rules-list">
         <li>
-          <b>Phase A, Resources.</b> Everyone puts a collector in one of the four resource
-          areas. A production card is then turned over and says what each area produces. You
+          <b>Phase A, Resources.</b> Everyone places{' '}
+          {rules.production.collectorsPerPlayer} collectors in the four resource areas, split
+          across two or stacked on one. A production card is then turned over and says what
+          one collector in each area brings back. Every card pays every area at least 1, so
+          stacking both on clay is a bet on how much clay, not on whether there is any. You
           choose before you see the card.
         </li>
         <li>
@@ -116,9 +119,11 @@ function HowToPlay({ rules }: { rules: GameRules }) {
 
       <div className="section-title">Your one action</div>
       <ul className="rules-list">
-        <li>Build a dam, raft, rope or anchor.</li>
+        <li>Build a dam, raft, rope or anchor. Click the <b>?</b> on any of them to see
+          exactly what it does before you spend anything.</li>
         <li>Buy a Power Card, drawn face down for {rules.powerCards.cost} resources of any mix.</li>
         <li>Destroy somebody&apos;s dam.</li>
+        {rules.distraction.enabled && <li>Play your Distraction token.</li>}
         <li>Play a Power Card that says it is played during your turn.</li>
       </ul>
       <p className="muted">
@@ -129,14 +134,19 @@ function HowToPlay({ rules }: { rules: GameRules }) {
       <div className="section-title">The river</div>
       <ul className="rules-list">
         <li>
-          Every river tile has a current strength from 0 to 4. Strength 4 is rare. Some
-          currents start <b>hidden</b> and are revealed the moment an animal stands on them,
-          and stay revealed.
+          Nearly every river tile flows. Each has a strength from 1 to 4 and a direction of
+          its own, shown on the tile as a number and an arrow.
         </li>
         <li>
-          The current pushes animals <b>{rules.current.direction === 'right' ? 'to the right' :
-            'to the left'}</b>, along the river. It never pushes them backward, so it costs
-          position rather than progress.
+          About half of them push <b>sideways</b>, a quarter push <b>forward</b> toward the
+          far bank and a quarter push <b>back</b> toward where you started. So the river can
+          hand you a crossing or take one away, not just shove you off your line. A current
+          of {rules.board.sidewaysOnlyFromStrength} or more only ever runs sideways.
+        </li>
+        <li>
+          Only <b>{rules.board.visibleCurrents}</b> currents start face up. Every other tile
+          is face down and shows a <b>?</b> until one of your animals stands on it, and then
+          it stays turned over for everybody. Finding out costs you the animal that found out.
         </li>
         <li>
           <b>Whirlpools</b> roll for left, right or forward, and affect each animal at most{' '}
@@ -170,19 +180,48 @@ function HowToPlay({ rules }: { rules: GameRules }) {
         </li>
       </ul>
 
-      <div className="section-title">Secret roles</div>
-      <ul className="rules-list">
-        <li>
-          At the end of round {rules.roles.dealAfterRound}, exactly one player is dealt a
-          special role: Saboteur, Hoarder or Champion. Everyone else gets an ordinary card.
-        </li>
-        <li>
-          A role pays {rules.roles.bonusPoints} points, and always needs at least{' '}
-          {rules.roles.minAnimalsAcross} animals across. The Hoarder also needs the most
-          resources outright, the Champion the most animals across outright.
-        </li>
-        <li>Roles are revealed at the end of the last round.</li>
-      </ul>
+      {rules.distraction.enabled && (
+        <>
+          <div className="section-title">Distraction tokens</div>
+          <ul className="rules-list">
+            <li>
+              Everyone gets {rules.distraction.tokensPerPlayer} for the whole game. Playing it
+              is your action for the turn.
+            </li>
+            <li>
+              Drop it on a river tile. Every animal within{' '}
+              {rules.distraction.radius} squares rolls a d{rules.distraction.dieSides},
+              including <b>your own</b>. A {rules.distraction.avoidOnRoll} or more and the
+              animal keeps its head; less and it is distracted. <b>Ducks</b> are the easiest
+              to distract and need a {rules.distraction.hardAvoidOnRoll}.
+            </li>
+            <li>
+              You then drag each distracted animal up to{' '}
+              {rules.distraction.pullDistance} squares <b>toward the token</b>, choosing the
+              distance separately for each one. So where you drop it decides everything: put
+              it behind a rival and the pull costs them ground.
+            </li>
+          </ul>
+        </>
+      )}
+
+      {rules.roles.enabled && (
+        <>
+          <div className="section-title">Secret roles</div>
+          <ul className="rules-list">
+            <li>
+              At the end of round {rules.roles.dealAfterRound}, exactly one player is dealt a
+              special role: Saboteur, Hoarder or Champion. Everyone else gets an ordinary card.
+            </li>
+            <li>
+              A role pays {rules.roles.bonusPoints} points, and always needs at least{' '}
+              {rules.roles.minAnimalsAcross} animals across. The Hoarder also needs the most
+              resources outright, the Champion the most animals across outright.
+            </li>
+            <li>Roles are revealed at the end of the last round.</li>
+          </ul>
+        </>
+      )}
     </div>
   )
 }
@@ -205,8 +244,9 @@ function ResolutionOrder({ rules }: { rules: GameRules }) {
       <ol className="rules-list">
         <li>The base current strength of the tile it is standing on.</li>
         <li>
-          Tile modifiers played this round: <b>Surge</b> adds, <b>Calm Water</b> subtracts,{' '}
-          <b>Redirect</b> reverses the direction, and the Saboteur&apos;s ability adds.
+          Tile modifiers played this round: <b>Surge</b> adds, <b>Calm Water</b> takes away,
+          and <b>Redirect</b> turns the tile&apos;s own direction around, whichever of the
+          four ways it was running.
         </li>
         <li>
           Islands. {rules.board.islandsBlockCurrent
@@ -221,7 +261,11 @@ function ResolutionOrder({ rules }: { rules: GameRules }) {
         </li>
         <li>An <b>Anchor</b>, then a <b>Current Shield</b>. Either makes the animal immune.</li>
         <li>Swan resistance, which never takes the strength below zero.</li>
-        <li>The animal is pushed that many squares, stopping at the bank.</li>
+        <li>
+          The animal is pushed that many squares in that tile&apos;s own direction, stopping
+          at the edge of the river. A forward push can carry it over the far bank and score;
+          a backward one can put it back on the starting bank.
+        </li>
         <li>
           Ducks then ride <b>one extra square</b>, but only if the current actually moved them,
           so the ability cannot trigger off a strength of zero or loop.

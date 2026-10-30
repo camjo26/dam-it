@@ -120,6 +120,13 @@ function requireEnemyAnimal(
   return animal
 }
 
+const OPPOSITE_DIRECTION: Record<CurrentDirection, CurrentDirection> = {
+  left: 'right',
+  right: 'left',
+  forward: 'back',
+  back: 'forward',
+}
+
 function addModifier(
   state: GameState,
   player: Player,
@@ -172,8 +179,8 @@ export const CARD_EFFECTS: Record<string, CardEffect> = {
       (a) => a.status !== 'finished' && a.col === tile.col && a.row === tile.row,
     )
     if (!occupied) return { ok: false, error: 'Redirect only works on an occupied tile.' }
-    const reversed: CurrentDirection =
-      state.rules.current.direction === 'right' ? 'left' : 'right'
+    // Turns the tile's own current around, whichever of the four ways it was running.
+    const reversed: CurrentDirection = OPPOSITE_DIRECTION[tile.direction]
     addModifier(state, player, tile, 0, reversed, `${player.name}'s Redirect`)
     return { ok: true, detail: `Current on ${coord(tile.col, tile.row)} now flows ${reversed}.` }
   },
@@ -199,11 +206,15 @@ export const CARD_EFFECTS: Record<string, CardEffect> = {
     if (b.kind === 'bank-top' || b.kind === 'bank-bottom') {
       return { ok: false, error: 'River Shift only swaps river tiles.' }
     }
-    const swap = { current: a.current, hidden: a.hidden, revealed: a.revealed }
+    // The direction travels with the strength: the whole token moves, not half of it.
+    const swap = { current: a.current, direction: a.direction, hidden: a.hidden,
+      revealed: a.revealed }
     a.current = b.current
+    a.direction = b.direction
     a.hidden = b.hidden
     a.revealed = b.revealed
     b.current = swap.current
+    b.direction = swap.direction
     b.hidden = swap.hidden
     b.revealed = swap.revealed
     return {

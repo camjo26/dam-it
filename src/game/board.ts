@@ -6,8 +6,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
 import type { GameRules } from './rules'
-import { weightedIndex } from './rng'
-import type { Board, RngState, Tile } from './types'
+import { shuffle, weightedIndex } from './rng'
+import type { Board, CurrentDirection, RngState, Tile } from './types'
+import { CURRENT_DIRECTIONS, SIDEWAYS_DIRECTIONS } from './types'
 
 export const TOP_BANK_ROW = 0
 
@@ -31,6 +32,25 @@ export function inBounds(board: Board, col: number, row: number): boolean {
 export function tileAt(board: Board, col: number, row: number): Tile | undefined {
   if (!inBounds(board, col, row)) return undefined
   return board.tiles[row * board.width + col]
+}
+
+/**
+ * Rolls one tile's direction. A current strong enough to be sideways-only never runs up or
+ * down the river: at that strength a forward push would be a free crossing and a backward
+ * one would undo most of a game's work, so the fiercest water only ever shoves you across.
+ */
+function rollDirection(
+  rules: GameRules,
+  strength: number,
+  rng: RngState,
+): [CurrentDirection, RngState] {
+  const weights = rules.board.currentDirectionWeights
+  if (strength >= rules.board.sidewaysOnlyFromStrength) {
+    const [index, next] = weightedIndex(rng, [weights[0] ?? 1, weights[1] ?? 1])
+    return [SIDEWAYS_DIRECTIONS[index < 0 ? 0 : index], next]
+  }
+  const [index, next] = weightedIndex(rng, weights)
+  return [CURRENT_DIRECTIONS[index < 0 ? 0 : index], next]
 }
 
 /** Builds the board from the rules, rolling hidden current strengths from the seeded RNG. */
@@ -59,6 +79,7 @@ export function createBoard(rules: GameRules, rng: RngState): [Board, RngState] 
           row,
           kind: row === TOP_BANK_ROW ? 'bank-top' : 'bank-bottom',
           current: 0,
+          direction: rules.current.direction,
           hidden: false,
           revealed: true,
         })
@@ -76,15 +97,11 @@ export function createBoard(rules: GameRules, rng: RngState): [Board, RngState] 
         current = strength < 0 ? 0 : strength
       }
 
-      // A tile with no current has nothing to hide, so only moving water starts hidden.
-      let hidden = false
+      let direction = rules.current.direction
       if (current > 0) {
-        const [roll, nextState] = weightedIndex(state, [
-          rules.board.hiddenCurrentFraction,
-          1 - rules.board.hiddenCurrentFraction,
-        ])
+        const [rolled, nextState] = rollDirection(rules, current, state)
         state = nextState
-        hidden = roll === 0
+        direction = rolled
       }
 
       tiles.push({
@@ -94,13 +111,36 @@ export function createBoard(rules: GameRules, rng: RngState): [Board, RngState] 
         kind: island ? 'island' : isWhirlpool ? 'whirlpool' : 'river',
         islandSize: island,
         current,
-        hidden,
-        revealed: !hidden,
+        direction,
+        // Settled below, once every tile exists and the face-up few can be drawn.
+        hidden: false,
+        revealed: true,
       })
     }
   }
 
+  state = hideCurrents(rules, tiles, state)
   return [{ width, riverDepth, tiles }, state]
+}
+
+/**
+ * Turns all but a handful of the flowing currents face down.
+ *
+ * Done as a draw from the finished board rather than a per-tile coin flip, so the number
+ * you can see is exactly the number the rules promise rather than an average. Islands and
+ * whirlpools are printed tiles and stay face up: it is the strength and direction of open
+ * water that is the secret, and plain still water has nothing to hide.
+ */
+function hideCurrents(rules: GameRules, tiles: Tile[], rng: RngState): RngState {
+  const candidates = tiles.filter((t) => t.kind === 'river' && t.current > 0)
+  const [shuffled, next] = shuffle(rng, candidates)
+
+  const faceUp = Math.max(0, Math.min(rules.board.visibleCurrents, shuffled.length))
+  for (let i = faceUp; i < shuffled.length; i += 1) {
+    shuffled[i].hidden = true
+    shuffled[i].revealed = false
+  }
+  return next
 }
 
 export interface Offset {

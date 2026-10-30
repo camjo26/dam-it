@@ -13,14 +13,21 @@ import { clearRoundEffects, resolveCurrentPhase } from './current'
 import { addLog } from './log'
 import { coord, isFinished, moveAnimalStep, placeAnimal, slideAnimal } from './movement'
 import { refreshMissionProgress } from './missions'
-import { allCollectorsPlaced, resetCollectors, resolveProduction } from './production'
+import {
+  allCollectorsPlaced,
+  collectorsLeft,
+  describeCollectors,
+  resetCollectors,
+  resolveProduction,
+} from './production'
 import { dealRoles, saboteurUsesLeft } from './roles'
-import { rollDie, nextInt } from './rng'
+import { rollDie } from './rng'
 import type { GameRules } from './rules'
 import { scoreGame } from './scoring'
 import type {
   Animal,
   ActionResult,
+  DistractionRoll,
   EquipmentId,
   FactionId,
   GameState,
@@ -28,7 +35,7 @@ import type {
   ResourceBag,
   ResourceId,
 } from './types'
-import { RESOURCE_IDS, RESOURCE_LABELS } from './types'
+import { CURRENT_VECTORS, RESOURCE_IDS, RESOURCE_LABELS } from './types'
 
 const MAX_UNDO_DEPTH = 40
 
@@ -46,6 +53,9 @@ export type GameAction =
   | { type: 'buy-power-card'; payment?: Partial<ResourceBag> }
   | { type: 'play-power-card'; playerId: string; instanceId: string; target: CardTarget }
   | { type: 'saboteur-surge'; playerId: string; tileId: string }
+  | { type: 'play-distraction'; col: number; row: number }
+  | { type: 'resolve-distraction'; moves: Array<{ animalId: string; distance: number }> }
+  | { type: 'remove-collector'; playerId: string; index: number }
   | { type: 'end-turn' }
   | { type: 'resolve-current' }
   | { type: 'undo' }
@@ -154,13 +164,6 @@ function startTurn(state: GameState): void {
   const faction = state.rules.factions[player.factionId]
   player.movementRemaining = faction.movementPoints
   player.actionsRemaining = faction.actionsPerTurn
-
-  for (const animal of state.animals) {
-    if (animal.playerId !== player.id) continue
-    animal.distracted = false
-  }
-
-  applyDistraction(state, player)
   clearUndo(state)
 
   addLog(state, {
@@ -172,50 +175,6 @@ function startTurn(state: GameState): void {
   })
 }
 
-/** The optional Ducks weakness. Off by default until the rule is confirmed. */
-function applyDistraction(state: GameState, player: Player): void {
-  const rules = state.rules.distraction
-  if (!rules.enabled) return
-  if (!rules.appliesTo.includes(player.factionId)) return
-
-  const [roll, rng] = rollDie(state.rng, rules.dieSides)
-  state.rng = rng
-  if (roll >= rules.avoidOnRoll) {
-    addLog(state, {
-      kind: 'distraction',
-      playerId: player.id,
-      message: `${player.name} rolled ${roll} and avoided distraction.`,
-    })
-    return
-  }
-
-  const candidates = state.animals.filter(
-    (a) => a.playerId === player.id && a.status !== 'finished',
-  )
-  if (candidates.length === 0) return
-
-  if (rules.scope === 'all-animals') {
-    for (const animal of candidates) animal.distracted = true
-    addLog(state, {
-      kind: 'distraction',
-      playerId: player.id,
-      message: `${player.name} rolled ${roll} and the whole flock is distracted this turn.`,
-    })
-    return
-  }
-
-  const [index, rng2] = nextInt(state.rng, 0, candidates.length - 1)
-  state.rng = rng2
-  const victim = candidates[index]
-  victim.distracted = true
-  addLog(state, {
-    kind: 'distraction',
-    playerId: player.id,
-    message: `${player.name} rolled ${roll}. One animal is distracted and cannot move.`,
-    detail: `The animal at ${coord(victim.col, victim.row)} sits this turn out.`,
-  })
-}
-
 function endTurnInternal(state: GameState): void {
   const player = activePlayer(state)
   if (player) {
@@ -224,7 +183,6 @@ function endTurnInternal(state: GameState): void {
     for (const animal of state.animals) {
       if (animal.playerId !== player.id) continue
       animal.bonusMovement = 0
-      animal.distracted = false
     }
     addLog(state, { kind: 'turn-end', playerId: player.id, message: `${player.name} ended their turn.` })
   }
@@ -280,6 +238,7 @@ function endRound(state: GameState): void {
   state.phase = 'resource'
   state.activePlayerIndex = 0
   state.saboteurUsesThisRound = {}
+  state.pendingDistraction = null
   for (const player of state.players) player.powerCardsPlayedThisRound = 0
   resetCollectors(state)
 
@@ -400,16 +359,17 @@ function handleDestroyDam(state: GameState, damId: string): ActionResult {
     message: `${player.name} destroyed the dam at ${coord(dam.col, dam.row)}.`,
   })
 
-  // Everything immediately downstream of the dam is swept forward by the released water.
+  // Everything immediately downstream of the dam is swept along by the released water.
+  // Downstream is whichever way that tile's own current runs, now that each tile has one.
   const sweep = state.rules.dam.sweepDistance
-  const direction = state.rules.current.direction === 'right' ? 1 : -1
-  const downstreamCol = dam.col + direction
+  const damTile = tileAt(state.board, dam.col, dam.row)
+  const { dc, dr } = CURRENT_VECTORS[damTile?.direction ?? state.rules.current.direction]
   const swept = state.animals.filter(
-    (a) => a.status !== 'finished' && a.col === downstreamCol && a.row === dam.row,
+    (a) => a.status !== 'finished' && a.col === dam.col + dc && a.row === dam.row + dr,
   )
   for (const animal of swept) {
     const before = coord(animal.col, animal.row)
-    const result = slideAnimal(state, animal, direction, 0, sweep)
+    const result = slideAnimal(state, animal, dc, dr, sweep)
     addLog(state, {
       kind: 'dam-sweep',
       playerId: animal.playerId,
@@ -675,6 +635,145 @@ function handleSaboteurSurge(
   return { ok: true, state }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////
+// Distraction tokens
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+/** Chebyshev distance, so the token's reach is a square around it rather than a diamond. */
+export function tileDistance(a: { col: number; row: number }, b: { col: number;
+  row: number }): number {
+  return Math.max(Math.abs(a.col - b.col), Math.abs(a.row - b.row))
+}
+
+/** The roll this animal needs to shrug off a distraction. Ducks need more than everyone. */
+export function distractionTarget(rules: GameRules, factionId: FactionId): number {
+  const d = rules.distraction
+  return d.hardToDistract.includes(factionId) ? d.hardAvoidOnRoll : d.avoidOnRoll
+}
+
+function handlePlayDistraction(state: GameState, col: number, row: number): ActionResult {
+  const player = requireTurn(state)
+  if (typeof player === 'string') return fail(player)
+  if (!state.rules.distraction.enabled) {
+    return fail('Distraction tokens are switched off in the current rules.')
+  }
+  if (player.distractionTokens <= 0) return fail('You have no Distraction token left.')
+  if (state.pendingDistraction) return fail('Finish the Distraction already in play first.')
+
+  const tile = tileAt(state.board, col, row)
+  if (!tile) return fail('That square is off the board.')
+  if (tile.kind === 'bank-top' || tile.kind === 'bank-bottom') {
+    return fail('A Distraction token goes on a river tile.')
+  }
+
+  const actionError = spendAction(player, state.rules.distraction.playUsesAction)
+  if (actionError) return fail(actionError)
+
+  player.distractionTokens -= 1
+
+  // Everything in range rolls, including the placer's own animals. Putting the token where
+  // it only catches opponents is the skill in it.
+  const radius = state.rules.distraction.radius
+  const inRange = state.animals.filter(
+    (a) => a.status !== 'finished' && tileDistance(a, { col, row }) <= radius,
+  )
+
+  const rolls: DistractionRoll[] = []
+  for (const animal of inRange) {
+    const [roll, rng] = rollDie(state.rng, state.rules.distraction.dieSides)
+    state.rng = rng
+    const neededRoll = distractionTarget(state.rules, animal.factionId)
+    rolls.push({
+      animalId: animal.id,
+      playerId: animal.playerId,
+      factionId: animal.factionId,
+      roll,
+      neededRoll,
+      distracted: roll < neededRoll,
+      movedSoFar: 0,
+    })
+  }
+
+  state.pendingDistraction = { placerId: player.id, col, row, rolls }
+
+  const caught = rolls.filter((r) => r.distracted).length
+  addLog(state, {
+    kind: 'distraction',
+    playerId: player.id,
+    message: `${player.name} played a Distraction token on ${coord(col, row)}.`,
+    detail: `${rolls.length} ${rolls.length === 1 ? 'animal was' : 'animals were'} within ` +
+      `${radius} squares. ${caught} looked away.`,
+  })
+  for (const entry of rolls) {
+    const owner = state.players.find((p) => p.id === entry.playerId)
+    addLog(state, {
+      kind: 'distraction-roll',
+      playerId: entry.playerId,
+      message: `${owner?.name ?? 'An animal'} rolled ${entry.roll} and ` +
+        `${entry.distracted ? 'was distracted' : 'kept looking ahead'}.`,
+      detail: `Needed ${entry.neededRoll} or more.`,
+    })
+  }
+
+  // The dice have been rolled, so the turn cannot be rewound to roll them again.
+  clearUndo(state)
+  return { ok: true, state }
+}
+
+function handleResolveDistraction(
+  state: GameState,
+  moves: Array<{ animalId: string; distance: number }>,
+): ActionResult {
+  const pending = state.pendingDistraction
+  if (!pending) return fail('No Distraction token is waiting to be resolved.')
+
+  const maxDistance = state.rules.distraction.pullDistance
+  const target = { col: pending.col, row: pending.row }
+
+  for (const move of moves) {
+    const entry = pending.rolls.find((r) => r.animalId === move.animalId)
+    if (!entry || !entry.distracted) continue
+    const animal = state.animals.find((a) => a.id === move.animalId)
+    if (!animal || animal.status === 'finished') continue
+
+    const steps = Math.max(0, Math.min(move.distance, maxDistance))
+    const before = coord(animal.col, animal.row)
+    let moved = 0
+
+    // One square at a time toward the token, closing the larger gap first so the animal
+    // takes the straightest line it can. It stops on the token rather than passing it.
+    for (let i = 0; i < steps; i += 1) {
+      const dCol = target.col - animal.col
+      const dRow = target.row - animal.row
+      if (dCol === 0 && dRow === 0) break
+      let dc = 0
+      let dr = 0
+      if (Math.abs(dCol) >= Math.abs(dRow)) dc = Math.sign(dCol)
+      else dr = Math.sign(dRow)
+      const result = slideAnimal(state, animal, dc, dr, 1)
+      if (result.moved === 0) break
+      moved += 1
+      if (isFinished(animal)) break
+    }
+
+    entry.movedSoFar = moved
+    if (moved > 0) {
+      const owner = state.players.find((p) => p.id === animal.playerId)
+      addLog(state, {
+        kind: 'distraction-pull',
+        playerId: animal.playerId,
+        message: `A distracted animal of ${owner?.name ?? 'a player'} wandered from ` +
+          `${before} to ${coord(animal.col, animal.row)}.`,
+        detail: `Drawn ${moved} toward the Distraction at ${coord(target.col, target.row)}.`,
+      })
+    }
+  }
+
+  state.pendingDistraction = null
+  refreshMissionProgress(state)
+  return { ok: true, state }
+}
+
 function handleSetDamExclusion(
   state: GameState,
   damId: string,
@@ -730,13 +829,38 @@ function handlePlaceCollector(
   if (state.phase !== 'resource') return fail('Collectors are placed in the Resource Phase.')
   const player = state.players.find((p) => p.id === playerId)
   if (!player) return fail('Unknown player.')
-  if (player.collectorArea !== null) return fail('That collector is already placed.')
+  const left = collectorsLeft(state, player)
+  if (left <= 0) return fail('All of your collectors are already placed.')
 
-  player.collectorArea = area
+  player.collectors.push(area)
+  const remaining = left - 1
   addLog(state, {
     kind: 'collector',
     playerId: player.id,
-    message: `${player.name} put their collector in ${RESOURCE_LABELS[area]}.`,
+    message: `${player.name} put a collector in ${RESOURCE_LABELS[area]}.`,
+    detail: remaining > 0
+      ? `${remaining} still to place.`
+      : `Collectors in ${describeCollectors(player)}.`,
+  })
+  return { ok: true, state }
+}
+
+/** Lets a player take a collector back before the card is turned over. */
+function handleRemoveCollector(
+  state: GameState,
+  playerId: string,
+  index: number,
+): ActionResult {
+  if (state.phase !== 'resource') return fail('Collectors are placed in the Resource Phase.')
+  const player = state.players.find((p) => p.id === playerId)
+  if (!player) return fail('Unknown player.')
+  if (index < 0 || index >= player.collectors.length) return fail('No collector there.')
+
+  const [area] = player.collectors.splice(index, 1)
+  addLog(state, {
+    kind: 'collector',
+    playerId: player.id,
+    message: `${player.name} took a collector back out of ${RESOURCE_LABELS[area]}.`,
   })
   return { ok: true, state }
 }
@@ -770,7 +894,6 @@ function handleMoveAnimal(
   if (!animal) return fail('Unknown animal.')
   if (animal.playerId !== player.id) return fail('That animal is not yours.')
   if (animal.status === 'finished') return fail('That animal has already crossed.')
-  if (animal.distracted) return fail('That animal is distracted and cannot move this turn.')
 
   const tileBefore = tileAt(state.board, col, row)
   const willReveal = Boolean(tileBefore && tileBefore.hidden && !tileBefore.revealed)
@@ -817,6 +940,12 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
 
   if (action.type === 'undo') return handleUndo(state)
 
+  // A played Distraction token freezes everything else until its drags have been chosen,
+  // so an animal cannot be moved out from under a roll that has already been made.
+  if (state.pendingDistraction && action.type !== 'resolve-distraction') {
+    return fail('Finish the Distraction first: choose how far each animal is drawn in.')
+  }
+
   const draft = clone(state)
   if (draft.phase === 'player-turns' && UNDOABLE.has(action.type)) {
     pushUndo(draft)
@@ -849,6 +978,12 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
       return handlePlayPowerCard(draft, action.playerId, action.instanceId, action.target)
     case 'saboteur-surge':
       return handleSaboteurSurge(draft, action.playerId, action.tileId)
+    case 'play-distraction':
+      return handlePlayDistraction(draft, action.col, action.row)
+    case 'resolve-distraction':
+      return handleResolveDistraction(draft, action.moves)
+    case 'remove-collector':
+      return handleRemoveCollector(draft, action.playerId, action.index)
     case 'end-turn': {
       const player = requireTurn(draft)
       if (typeof player === 'string') return fail(player)

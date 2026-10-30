@@ -31,6 +31,7 @@ import type {
   RngState,
   Tile,
 } from './types'
+import { CURRENT_VECTORS } from './types'
 
 export type WhirlpoolDirection = 'left' | 'right' | 'forward'
 
@@ -40,8 +41,16 @@ const WHIRLPOOL_VECTORS: Record<WhirlpoolDirection, { dc: number; dr: number }> 
   forward: { dc: 0, dr: 1 },
 }
 
-function directionVector(direction: CurrentDirection): number {
-  return direction === 'right' ? 1 : -1
+/** How far downstream a column is, for the resolution order. */
+function flowSign(direction: CurrentDirection): number {
+  return direction === 'left' ? -1 : 1
+}
+
+export const DIRECTION_LABELS: Record<CurrentDirection, string> = {
+  left: 'left',
+  right: 'right',
+  forward: 'forward, toward the far bank',
+  back: 'back, toward the starting bank',
 }
 
 /** True when this dam calms the given square. */
@@ -93,7 +102,13 @@ export function assessCurrent(state: GameState, animal: Animal): CurrentAssessme
 
   const baseStrength = tile.current
   let strength = baseStrength
-  reasons.push(`Tile ${coord(animal.col, animal.row)} has a current of ${baseStrength}.`)
+  direction = tile.direction
+  reasons.push(
+    baseStrength === 0
+      ? `Tile ${coord(animal.col, animal.row)} is still water.`
+      : `Tile ${coord(animal.col, animal.row)} has a current of ${baseStrength}, running ` +
+        `${DIRECTION_LABELS[direction]}.`,
+  )
 
   // 2. Modifiers played for this round.
   for (const modifier of state.tileModifiers) {
@@ -105,7 +120,7 @@ export function assessCurrent(state: GameState, animal: Animal): CurrentAssessme
     }
     if (modifier.overrideDirection) {
       direction = modifier.overrideDirection
-      reasons.push(`${modifier.sourceLabel}: current now flows ${direction}.`)
+      reasons.push(`${modifier.sourceLabel}: current now flows ${DIRECTION_LABELS[direction]}.`)
     }
   }
   strength = Math.max(0, strength)
@@ -147,7 +162,7 @@ export function assessCurrent(state: GameState, animal: Animal): CurrentAssessme
 
 function orderedAnimals(state: GameState): Animal[] {
   const rules = state.rules
-  const flowing = directionVector(rules.current.direction)
+  const flowing = flowSign(rules.current.direction)
   const eligible = state.animals.filter((animal) => {
     if (animal.status === 'finished') return false
     if (animal.row === TOP_BANK_ROW && !rules.current.affectsBankAnimals) return false
@@ -262,12 +277,12 @@ export function resolveCurrentPhase(state: GameState): CurrentStep[] {
     let totalMoved = 0
     const tilesEntered: Tile[] = []
     if (assessment.effectiveStrength > 0) {
-      const dc = directionVector(assessment.direction)
-      const result = push(state, animal, dc, 0, assessment.effectiveStrength)
+      const { dc, dr } = CURRENT_VECTORS[assessment.direction]
+      const result = push(state, animal, dc, dr, assessment.effectiveStrength)
       totalMoved += result.moved
       tilesEntered.push(...result.path)
       if (result.moved < assessment.effectiveStrength) {
-        reasons.push(`Stopped by the bank after ${result.moved} of ` +
+        reasons.push(`Stopped by the edge of the river after ${result.moved} of ` +
           `${assessment.effectiveStrength} squares.`)
       } else {
         reasons.push(`Pushed ${result.moved} ${plural(result.moved, 'square')} ` +
@@ -277,7 +292,7 @@ export function resolveCurrentPhase(state: GameState): CurrentStep[] {
       // 8. Ducks ride the current one square further.
       const faction = rules.factions[animal.factionId]
       if (faction.goWithTheFlowBonus > 0 && result.moved > 0 && !isFinished(animal)) {
-        const bonus = push(state, animal, dc, 0, faction.goWithTheFlowBonus)
+        const bonus = push(state, animal, dc, dr, faction.goWithTheFlowBonus)
         tilesEntered.push(...bonus.path)
         if (bonus.moved > 0) {
           totalMoved += bonus.moved

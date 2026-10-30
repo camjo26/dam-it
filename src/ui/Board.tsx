@@ -11,8 +11,19 @@ import { useMemo } from 'react'
 import { bottomBankRow, tileAt } from '../game/board'
 import { damCalms } from '../game/current'
 import { coord } from '../game/movement'
-import type { Animal, GameState, Tile } from '../game/types'
+import type { Animal, CurrentDirection, GameState, Tile } from '../game/types'
 import { BANK_BOTTOM_ART, BANK_TOP_ART, bg, factionArt, tileArt } from './art'
+
+/**
+ * Each tile now rolls its own direction, so the printed arrows on the artwork cannot be
+ * trusted to point the right way. The badge is the authority, and carries the arrow itself.
+ */
+const DIRECTION_ARROWS: Record<CurrentDirection, string> = {
+  left: '←',
+  right: '→',
+  forward: '↓',
+  back: '↑',
+}
 
 export interface BoardProps {
   state: GameState
@@ -41,7 +52,14 @@ function currentLabel(tile: Tile, revealAll: boolean): { text: string; hidden: b
   if (tile.kind === 'bank-top' || tile.kind === 'bank-bottom') return { text: '', hidden: false }
   if (!isRevealed(tile, revealAll)) return { text: '?', hidden: true }
   if (tile.current === 0) return { text: '', hidden: false }
-  return { text: String(tile.current), hidden: false }
+  return { text: `${tile.current}${DIRECTION_ARROWS[tile.direction]}`, hidden: false }
+}
+
+function describeCurrent(tile: Tile, revealAll: boolean): string {
+  if (tile.kind === 'bank-top' || tile.kind === 'bank-bottom') return ''
+  if (!isRevealed(tile, revealAll)) return 'Face down until an animal enters it'
+  if (tile.current === 0) return 'Still water'
+  return `Current ${tile.current}, running ${tile.direction}`
 }
 
 /**
@@ -94,6 +112,13 @@ export function Board({
     return map
   }, [state.dams])
 
+  const pending = state.pendingDistraction
+  const distractionKey = pending ? `${pending.col},${pending.row}` : null
+  const distractedIds = useMemo(
+    () => new Set((pending?.rolls ?? []).filter((r) => r.distracted).map((r) => r.animalId)),
+    [pending],
+  )
+
   const calmedTiles = useMemo(() => {
     const set = new Set<string>()
     for (const dam of state.dams) {
@@ -143,6 +168,7 @@ export function Board({
             if (legalKeys.has(key)) classes.push('legal', 'clickable')
             if (targetableSet.has(tile.id)) classes.push('targeting', 'clickable')
             if (calmedTiles.has(tile.id)) classes.push('calmed')
+            if (distractionKey === key) classes.push('distracting')
 
             const title = [
               coord(col, row),
@@ -155,13 +181,10 @@ export function Board({
                     : tile.kind === 'whirlpool'
                       ? 'Whirlpool'
                       : 'River',
-              tile.kind === 'bank-top' || tile.kind === 'bank-bottom'
-                ? ''
-                : tile.hidden && !tile.revealed && !revealAllCurrents
-                  ? 'Current hidden until an animal enters'
-                  : `Current ${tile.current}`,
+              describeCurrent(tile, revealAllCurrents),
               calmedTiles.has(tile.id) ? 'Calmed by a dam' : '',
               damsByTile.has(key) ? 'Dam built here' : '',
+              distractionKey === key ? 'A Distraction token is on this square' : '',
             ]
               .filter(Boolean)
               .join(' - ')
@@ -186,13 +209,14 @@ export function Board({
                     className={`dam${state.rules.dam.calmAxis === 'horizontal' ? ' vertical' : ''}`}
                   />
                 )}
+                {distractionKey === key && <span className="distraction-token">!</span>}
                 <div className="animals">
                   {animals.map((animal) => {
                     const pip = ['pip', animal.factionId]
                     if (animal.id === selectedAnimalId) pip.push('selected')
                     if (animal.anchoredThroughRound !== null) pip.push('anchored')
                     if (animal.shieldedForRound === state.round) pip.push('shielded')
-                    if (animal.distracted) pip.push('distracted')
+                    if (distractedIds.has(animal.id)) pip.push('distracted')
                     if (highlightAnimalIds.includes(animal.id)) pip.push('moving')
                     return (
                       <span
@@ -226,7 +250,9 @@ function animalTitle(state: GameState, animal: Animal): string {
     parts.push(`anchored through round ${animal.anchoredThroughRound}`)
   }
   if (animal.shieldedForRound === state.round) parts.push('shielded from the current')
-  if (animal.distracted) parts.push('distracted, cannot move this turn')
+  if (state.pendingDistraction?.rolls.some((r) => r.animalId === animal.id && r.distracted)) {
+    parts.push('distracted, and can be drawn toward the token')
+  }
   if (animal.bonusMovement > 0) parts.push(`${animal.bonusMovement} extra movement`)
   if (animal.islandsVisited.length > 0) {
     parts.push(`${animal.islandsVisited.length} islands visited`)

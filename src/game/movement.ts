@@ -71,7 +71,7 @@ export function isFinished(animal: Animal): boolean {
 }
 
 export function isMovable(animal: Animal): boolean {
-  return !isFinished(animal) && !animal.distracted
+  return !isFinished(animal)
 }
 
 /** Movement points available to this animal: its own bonus plus the player's shared pool. */
@@ -146,7 +146,12 @@ export function moveAnimalStep(
 
   const details: string[] = []
   if (outcome.revealedCurrent && outcome.tile) {
-    details.push(`Revealed a hidden current of ${outcome.tile.current}.`)
+    details.push(
+      outcome.tile.current === 0
+        ? 'Turned the tile over: still water.'
+        : `Turned the tile over: current ${outcome.tile.current} running ` +
+          `${outcome.tile.direction}.`,
+    )
   }
   if (outcome.enteredIsland) details.push('Landed on an island.')
   if (outcome.finished) details.push('Reached the far bank and scored.')
@@ -206,8 +211,9 @@ export function describeTile(state: GameState, col: number, row: number): string
   if (tile.kind === 'bank-bottom') return 'far bank'
   if (tile.kind === 'island') return `${tile.islandSize} island`
   if (tile.kind === 'whirlpool') return 'whirlpool'
-  const shown = tile.hidden && !tile.revealed ? 'hidden' : String(tile.current)
-  return `river, current ${shown}`
+  if (tile.hidden && !tile.revealed) return 'river, current hidden'
+  if (tile.current === 0) return 'river, still water'
+  return `river, current ${tile.current} ${tile.direction}`
 }
 
 /** Every square the animal could legally step to right now, for highlighting in the UI. */

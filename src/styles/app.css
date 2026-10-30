@@ -382,15 +382,18 @@ h4 {
   box-shadow: inset 0 0 0 2px rgba(120, 220, 160, 0.55);
 }
 
-/* The tile artwork draws the arrows, so the badge gives the exact strength as a numeral
-   rather than repeating them as chevrons. */
+/* Each tile now rolls its own direction, so the arrows printed on the artwork cannot be
+   trusted to point the right way. The badge carries the real strength and the real arrow,
+   which is why it is a pill rather than a circle. */
 .tile .current {
   position: absolute;
   top: 3px;
   left: 3px;
   min-width: 13px;
-  height: 13px;
-  border-radius: 50%;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  gap: 1px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -407,6 +410,30 @@ h4 {
   color: #1c1405;
   background: #ffd770;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+/* The square a Distraction token is sitting on, while its rolls are being resolved. */
+.tile.distracting {
+  box-shadow: inset 0 0 0 2px var(--warn), 0 0 14px rgba(255, 193, 71, 0.45);
+}
+
+.tile .distraction-token {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  color: #2a1a00;
+  background: var(--warn);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
 }
 
 .tile .coord {
@@ -510,8 +537,11 @@ h4 {
   box-shadow: 0 0 0 2px rgba(120, 200, 255, 0.9);
 }
 
+/* Caught by a Distraction token and waiting to be dragged, rather than greyed out and
+   out of play: it is about to be moved, so it is marked rather than dimmed. */
 .pip.distracted {
-  opacity: 0.45;
+  box-shadow: 0 0 0 2px var(--warn);
+  animation: bob 0.9s ease infinite;
 }
 
 .pip.moving {
@@ -635,6 +665,83 @@ h4 {
 .kit-icon {
   vertical-align: -4px;
   margin-right: 4px;
+}
+
+.kit-icon.big {
+  width: 30px;
+  height: 30px;
+  vertical-align: middle;
+  margin-right: 0;
+}
+
+/* The little "?" beside a shop item, which opens what that piece of equipment does. */
+.info-btn {
+  margin-left: 6px;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--panel-line);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.info-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ production card --- */
+
+.prod-card {
+  border: 1px solid var(--panel-line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 10px 12px;
+}
+
+.prod-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  margin-bottom: 8px;
+}
+
+/* Four across on a wide panel, two on a narrow one, so a yield is never cut in half. */
+.prod-yields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 6px;
+}
+
+.prod-yield {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--panel-line);
+}
+
+.prod-yield .amount {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.prod-yield .who {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.prod-note {
+  margin-top: 8px;
+  font-size: 11px;
 }
 
 /* -------------------------------------------------------------------------------- lists --- */
@@ -870,6 +977,10 @@ h4 {
 
 .modal.narrow {
   width: min(560px, 100%);
+}
+
+.modal.small {
+  width: min(460px, 100%);
 }
 
 .modal > header {

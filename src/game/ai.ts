@@ -16,12 +16,14 @@ import {
   autoPayment,
   canAfford,
   equipmentCost,
+  tileDistance,
   totalResources,
   type GameAction,
 } from './engine'
 import { legalDestinations } from './movement'
 import { deriveFloat } from './rng'
 import { missionById } from './missions'
+import { collectorsLeft } from './production'
 import { COLLECTOR_AREAS } from './rules'
 import { saboteurUsesLeft } from './roles'
 import type {
@@ -216,6 +218,14 @@ function bestMove(state: GameState, player: Player): MoveCandidate | null {
 }
 
 /** The resource area the AI most wants this round, based on what it is short of. */
+// How much an area already holding one of this player's collectors is played down when the
+// next one is placed. Below 1 so collectors spread out unless one need dominates.
+const COLLECTOR_REPEAT_DAMPING = 0.55
+
+// A Distraction is only worth an action if it catches this many more opponents than it does
+// the AI's own animals, counting only opponents it would actually drag backward.
+const DISTRACTION_MIN_GAIN = 2
+
 function chooseCollectorArea(state: GameState, player: Player): ResourceId {
   const wanted: Record<ResourceId, number> = { wood: 0, stone: 0, clay: 0, reeds: 0 }
 
@@ -234,6 +244,10 @@ function chooseCollectorArea(state: GameState, player: Player): ResourceId {
 
   // Everything is useful toward a Power Card, so break ties toward the smallest stock.
   for (const id of RESOURCE_IDS) wanted[id] += 1 / (1 + player.resources[id])
+
+  // This runs once per collector, so an area already taken is damped down. A second
+  // collector therefore spreads by default, but still doubles up on an overwhelming need.
+  for (const area of player.collectors) wanted[area] *= COLLECTOR_REPEAT_DAMPING
 
   let best: ResourceId = COLLECTOR_AREAS[0]
   for (const id of COLLECTOR_AREAS) {
@@ -379,13 +393,59 @@ function cardPlay(state: GameState, player: Player): GameAction | null {
  * The single next thing this AI player wants to do, or null when it has nothing left.
  * Mirrors what a person can do through the interface, in the same phases.
  */
+/**
+ * The best tile to put a Distraction token on, or null when none is worth the action.
+ *
+ * Scored on what the pull would actually achieve: an opponent is only worth catching if the
+ * token sits behind them, because the drag is always toward the token and so would otherwise
+ * push them on toward the far bank. The AI's own animals count against the tile.
+ */
+function distractionSpot(state: GameState, player: Player): Tile | null {
+  const radius = state.rules.distraction.radius
+  let best: Tile | null = null
+  let bestScore = DISTRACTION_MIN_GAIN - 1
+
+  for (const tile of state.board.tiles) {
+    if (tile.kind === 'bank-top' || tile.kind === 'bank-bottom') continue
+    let score = 0
+    for (const animal of state.animals) {
+      if (animal.status === 'finished') continue
+      if (tileDistance(animal, tile) > radius) continue
+      if (animal.playerId === player.id) score -= 1
+      else if (animal.row > tile.row) score += 1
+    }
+    if (score > bestScore) {
+      bestScore = score
+      best = tile
+    }
+  }
+  return best
+}
+
 export function chooseAiAction(state: GameState, playerId: string): GameAction | null {
   const player = state.players.find((p) => p.id === playerId)
   if (!player) return null
 
-  // Phase A: put the collector down.
+  // A token it played is resolved before anything else: opponents are dragged as far as the
+  // rules allow, and its own animals are left exactly where they are.
+  const pending = state.pendingDistraction
+  if (pending) {
+    if (pending.placerId !== playerId) return null
+    const pull = state.rules.distraction.pullDistance
+    return {
+      type: 'resolve-distraction',
+      moves: pending.rolls
+        .filter((roll) => roll.distracted)
+        .map((roll) => ({
+          animalId: roll.animalId,
+          distance: roll.playerId === playerId ? 0 : pull,
+        })),
+    }
+  }
+
+  // Phase A: put the collectors down, one action at a time.
   if (state.phase === 'resource') {
-    if (player.collectorArea === null) {
+    if (collectorsLeft(state, player) > 0) {
       return { type: 'place-collector', playerId, area: chooseCollectorArea(state, player) }
     }
     return null
@@ -444,6 +504,11 @@ export function chooseAiAction(state: GameState, playerId: string): GameAction |
   if (player.actionsRemaining > 0) {
     const card = cardPlay(state, player)
     if (card) return card
+
+    if (state.rules.distraction.enabled && player.distractionTokens > 0) {
+      const spot = distractionSpot(state, player)
+      if (spot) return { type: 'play-distraction', col: spot.col, row: spot.row }
+    }
 
     const purchase = chooseEquipmentPurchase(state, player)
     if (purchase) return { type: 'buy-equipment', item: purchase }

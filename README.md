@@ -41,16 +41,38 @@ pnpm build
 
 1. Open the app. Leave the mode on **Solo**, pick **Ducks**, leave the opponent on
    **Normal - Old Mottle** and press **Start a 10 round game**.
-2. **Phase A.** Put your collector in a resource area. A production card is then turned over
-   and pays everyone according to where their collector is. You choose before you see the card.
+2. **Phase A.** Put your **two** collectors in resource areas - split them, or stack both on
+   one area to double up on a hunch. A production card is then turned over and pays every
+   collector according to where it stands. Every card pays every area at least 1, so a
+   collector is never wasted. You choose before you see the card.
 3. **Phase B.** Click one of your animals, then click a highlighted square to move it. You have
    3 movement points to split between your animals however you like, plus one action: build
-   something, buy a Power Card, destroy a dam, or play a card. Press **End turn** when done.
+   something, buy a Power Card, destroy a dam, play your Distraction token, or play a card.
+   Press **End turn** when done.
 4. The three computer players take their turns. Watch the board, or read the log.
 5. **Phase C.** Every player has acted, so the current runs. Play any card that says *before
    the Current Phase*, then press **Resolve the Current Phase**. A report then shows which
    animal moved, where to, and exactly why.
-6. After round 10 the final scoreboard appears with the secret roles revealed.
+6. After round 10 the final scoreboard appears.
+
+### The river
+
+Nearly every tile flows, and each has its own strength (1 to 4) and its own direction, drawn
+on the tile as a number and an arrow. Roughly half push sideways, a quarter push **forward**
+toward the far bank and a quarter push **back** toward where you started, so the river can
+hand you a crossing or take one away. A current of 4 only ever runs sideways.
+
+Only **5** currents start face up. Every other tile shows a **?** until one of your animals
+stands on it, and then it stays turned over for everybody - so finding out costs you the
+animal that found out.
+
+### Distraction tokens
+
+Everyone has one, for the whole game. Playing it is your action. Drop it on a river tile and
+every animal within 3 squares rolls a d6, **including your own**: 4 or more and the animal
+keeps its head, less and it is distracted. Ducks are the easiest to distract and need a 6.
+You then drag each distracted animal up to 3 squares **toward the token**, choosing the
+distance separately for each one - so where you drop it decides everything.
 
 ### Hot seat
 
@@ -81,9 +103,14 @@ Press **Rules editor** on the setup screen or in a game. Every setting carries a
 - **provisional** - chosen so the prototype is playable, and easy to reverse.
 
 The tabs cover game length, board size, islands and whirlpool positions, the current strength
-mix, movement, dams, equipment costs, the Power Card deck, missions, the production deck,
-secret roles, distraction and the computer opponents. The footer has **Restore defaults**,
-**Export JSON** and **Import JSON**, plus **Save and start a new game**.
+and direction mixes, how many currents start face up, movement, dams, equipment costs, the
+Power Card deck, missions, the production deck, collectors, Distraction tokens, secret roles
+and the computer opponents. The footer has **Restore defaults**, **Export JSON** and
+**Import JSON**, plus **Save and start a new game**.
+
+Secret roles are **parked** rather than deleted: the Saboteur's powers and scoring were never
+settled, so the game is being tested without them. Switching `roles.enabled` back on in the
+Roles tab restores the whole mechanic, and the tests still cover it.
 
 Changing a rule in the middle of a game warns you first. Board size cannot be applied to a
 board that is already laid out, and the editor says so.
@@ -116,16 +143,19 @@ pnpm sim -- --games 150 --seed test --set board.riverDepth=5
 
 ## What the simulator says so far
 
-300 games at Normal, default rules, in `docs/balance/baseline.csv`:
+300 games at Normal, v0.03 rules, in `docs/balance/v0.03.csv`:
 
-| Faction | Win % | Score | Animals across | Mission % | Built |
-|---|---|---|---|---|---|
-| Ducks | 19 | 3.75 | 2.50 | 19 | 3.9 |
-| Swans | 19 | 3.98 | 2.73 | 18 | 3.9 |
-| Frogs | 19 | 3.79 | 2.17 | 21 | 3.1 |
-| Beavers | 24 | 4.42 | 2.87 | 21 | 5.9 |
+| Faction | Win % | Score | Animals across | Mission % | Built | Carried by the current |
+|---|---|---|---|---|---|---|
+| Ducks | 20 | 5.07 | 3.53 | 35 | 7.5 | 17.3 |
+| Swans | 15 | 4.87 | 3.67 | 28 | 7.4 | 6.4 |
+| Frogs | 20 | 4.83 | 2.99 | 43 | 6.5 | 16.3 |
+| Beavers | 26 | 5.36 | 3.53 | 41 | 9.0 | 17.5 |
 
-The factions are close. Three findings worth a look are in
+Crossings are up from about 2.5 to about 3.4 now that a quarter of the river pushes forward,
+and Power Cards actually get bought. The standout new finding is that **Swan resistance has
+become a drawback**: they get the most animals across and win least, because taking 1 off
+every current also means turning down the forward ones. Three findings worth a look are in
 [docs/rules.md](docs/rules.md#what-the-numbers-say).
 
 ## How it is put together
@@ -146,8 +176,10 @@ src/game/      the engine: no DOM, no React, no timers
   runner.ts        drives AI turns and automatic phases
 src/ui/        React components, which only read state and dispatch actions
   art.ts           maps tiles, animals and icons to the pictures cut from the sheets
+src/state/     saving, loading and the React hook that drives the engine
+  storage.ts       versioned saves, and the merge that loads an older rules file
 scripts/       the headless simulator, and the artwork extractor
-tests/         50 tests covering the rules and whole games
+tests/         70 tests covering the rules and whole games
 ```
 
 The component sheets in the project root are the source of truth for the artwork. Nothing in
@@ -174,9 +206,18 @@ Two things follow from that split and are worth keeping:
 pnpm test
 ```
 
-50 tests: movement limits, round progression, double-resolution guards, current resolution,
+70 tests: movement limits, round progression, double-resolution guards, current resolution,
 hidden current reveals, dam calming and destruction, anchor duration, Duck and Swan abilities,
 Frog extra actions, Beaver discounts, Power Card timing and the one-per-round limit, whirlpool
 resolution, mission scoring, secret-role eligibility, final scoring, undo, and 24 complete
 games across three difficulties checking that the deck is conserved, roles are dealt once, the
 current resolves exactly once a round, and the same seed gives the same game.
+
+The v0.03 rules have their own file, `tests/river-and-tokens.test.ts`: forward and backward
+currents, the sideways-only rule at strength 4, Redirect turning a tile's own direction
+around, exactly five currents face up, two collectors paid separately, and the whole
+Distraction sequence from the roll to the drag.
+
+`tests/storage.test.ts` covers loading a rules file written by an older build. That one is
+worth keeping: a shallow merge there silently dropped every new field and crashed the board
+builder, and nothing else in the suite could have caught it.

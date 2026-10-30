@@ -111,15 +111,24 @@ export const RULE_SECTIONS: RuleSection[] = [
           'ambiguous. On, an animal on an island ignores the current.',
       },
       {
-        path: 'board.hiddenCurrentFraction',
-        label: 'Share of moving water that starts hidden',
+        path: 'board.visibleCurrents',
+        label: 'Currents that start face up',
         type: 'number',
         status: 'provisional',
         min: 0,
-        max: 1,
-        step: 0.05,
-        note: 'Only tiles with a current above zero are ever hidden, because still water has ' +
-          'nothing to hide.',
+        max: 80,
+        note: 'Everything else is face down until an animal stands on it. Only tiles with a ' +
+          'current above zero are ever hidden: still water has nothing to hide.',
+      },
+      {
+        path: 'board.sidewaysOnlyFromStrength',
+        label: 'Sideways only from strength',
+        type: 'number',
+        status: 'provisional',
+        min: 1,
+        max: 5,
+        note: 'A current this strong or stronger never runs forward or back, because at that ' +
+          'strength it would hand out or take away most of a crossing in one phase.',
       },
     ],
   },
@@ -154,17 +163,20 @@ export const RULE_SECTIONS: RuleSection[] = [
   {
     id: 'current',
     title: 'The current',
-    blurb: 'Direction, what happens at the edge, and the order simultaneous effects resolve in.',
+    blurb: 'Every river tile rolls its own strength and its own direction, so the river ' +
+      'shoves an animal sideways about half the time and costs or gives it ground the rest.',
     fields: [
       {
         path: 'current.direction',
-        label: 'Direction of flow',
+        label: 'Which way the river runs overall',
         type: 'select',
         status: 'established',
         options: [
           { value: 'right', label: 'Left to right' },
           { value: 'left', label: 'Right to left' },
         ],
+        note: 'Used for the resolution order and for still tiles. Each tile rolls its own ' +
+          'direction from the weights in the Board tab.',
       },
       {
         path: 'current.edgeBehaviour',
@@ -392,8 +404,19 @@ export const RULE_SECTIONS: RuleSection[] = [
   {
     id: 'production',
     title: 'Collectors and production',
-    blurb: 'The exact production distribution is not settled. These cards are provisional.',
+    blurb: 'Every card pays every area at least one, so no collector is ever wasted. The ' +
+      'exact distribution is still provisional.',
     fields: [
+      {
+        path: 'production.collectorsPerPlayer',
+        label: 'Collectors each player places',
+        type: 'number',
+        status: 'established',
+        min: 1,
+        max: 4,
+        note: 'Two by default. They may go in two areas or stack on one, and each is paid ' +
+          'separately, so stacking doubles that area up.',
+      },
       {
         path: 'production.sharingPenalty',
         label: 'Penalty when two collectors share an area',
@@ -416,7 +439,9 @@ export const RULE_SECTIONS: RuleSection[] = [
   {
     id: 'roles',
     title: 'Secret roles',
-    blurb: 'One player gets a special role. The Saboteur powers are not settled.',
+    blurb: 'Parked for now, which is why this is off. The Saboteur powers and the scoring ' +
+      'were never settled, so the game is being tested without them. Everything still works ' +
+      'if you switch it back on.',
     fields: [
       { path: 'roles.enabled', label: 'Secret roles in play', type: 'boolean',
         status: 'established' },
@@ -454,32 +479,68 @@ export const RULE_SECTIONS: RuleSection[] = [
   },
   {
     id: 'distraction',
-    title: 'Distraction',
-    blurb: 'The printed faction card says Ducks "must roll 6 to avoid Distraction". ' +
-      'The brief asks for it to be optional until confirmed, so it is off by default.',
+    title: 'Distraction tokens',
+    blurb: 'Everyone holds a Distraction token. Played on a river tile for your action, it ' +
+      'makes every animal near it roll, and whoever played it drags the ones that look away ' +
+      'toward the token. Ducks are the easiest to distract.',
     fields: [
-      { path: 'distraction.enabled', label: 'Distraction in play', type: 'boolean',
+      { path: 'distraction.enabled', label: 'Distraction tokens in play', type: 'boolean',
         status: 'provisional' },
-      { path: 'distraction.dieSides', label: 'Die sides', type: 'number',
-        status: 'provisional', min: 2, max: 20 },
       {
-        path: 'distraction.avoidOnRoll',
-        label: 'Roll this or higher to avoid it',
+        path: 'distraction.tokensPerPlayer',
+        label: 'Tokens each player starts with',
         type: 'number',
-        status: 'provisional',
-        min: 1,
-        max: 20,
+        status: 'established',
+        min: 0,
+        max: 5,
+        note: 'The brief gives everyone one for the whole game, so it is a card you only ' +
+          'get to play once.',
       },
       {
-        path: 'distraction.scope',
-        label: 'What gets distracted',
-        type: 'select',
-        status: 'provisional',
-        options: [
-          { value: 'one-animal', label: 'One animal, chosen at random' },
-          { value: 'all-animals', label: 'Every animal that faction owns' },
-        ],
-        note: 'One animal is far gentler with ten ducks on the board.',
+        path: 'distraction.radius',
+        label: 'Squares it reaches',
+        type: 'number',
+        status: 'established',
+        min: 1,
+        max: 6,
+        note: 'Measured as a square around the token, so a corner counts the same as a side.',
+      },
+      { path: 'distraction.dieSides', label: 'Die sides', type: 'number',
+        status: 'established', min: 2, max: 20 },
+      {
+        path: 'distraction.avoidOnRoll',
+        label: 'Roll this or higher to shrug it off',
+        type: 'number',
+        status: 'established',
+        min: 1,
+        max: 20,
+        note: 'Four on a six means an even chance for everyone but the Ducks.',
+      },
+      {
+        path: 'distraction.hardAvoidOnRoll',
+        label: 'Ducks need this or higher',
+        type: 'number',
+        status: 'established',
+        min: 1,
+        max: 20,
+        note: 'The printed Ducks card says they must roll a 6, which is why they are the ' +
+          'faction worth aiming a token at.',
+      },
+      {
+        path: 'distraction.pullDistance',
+        label: 'Squares a distracted animal can be dragged',
+        type: 'number',
+        status: 'established',
+        min: 0,
+        max: 6,
+        note: 'The player who placed the token chooses anything from nothing up to this, ' +
+          'separately for each animal caught.',
+      },
+      {
+        path: 'distraction.playUsesAction',
+        label: 'Playing it uses your action',
+        type: 'boolean',
+        status: 'established',
       },
     ],
   },
@@ -580,19 +641,30 @@ export const OPEN_QUESTIONS: OpenQuestion[] = [
     current: '2 Stone.',
   },
   {
-    id: 'saboteur',
+    id: 'roles',
     question:
-      'What does the Saboteur actually do, and how does it score? At the moment it scores the ' +
-      'same 6 points as the other roles for getting 2 animals across, which makes it the ' +
-      'easiest of the three.',
-    current: 'A single free current increase per round, and the shared qualifying condition.',
+      'Are secret roles coming back, and if so what does the Saboteur do and how does it ' +
+      'score? It was the easiest of the three: the same 6 points for the same 2 animals ' +
+      'across, without having to lead at anything.',
+    current: 'Parked. The whole mechanic is off, and can be switched back on in the Roles ' +
+      'tab if you want to test it.',
   },
   {
-    id: 'distraction',
+    id: 'distraction-own-animals',
     question:
-      'Is Distraction in the game? The Ducks faction card says they must roll 6 to avoid it, ' +
-      'but the brief asks for it to stay optional. If it is in, does it hit one duck or all?',
-    current: 'Off. One animal at a time when switched on.',
+      'A Distraction token makes every animal within 3 squares roll, including the animals ' +
+      'of whoever played it. Should it spare your own, or is catching yourself part of the ' +
+      'cost of playing it?',
+    current: 'Everything in range rolls, your own included. Where you drop it is the skill.',
+  },
+  {
+    id: 'distraction-forward-pull',
+    question:
+      'A distracted animal is dragged toward the token, so a token dropped ahead of a rival ' +
+      'pulls them forward and helps them. Dropped on row 1 in round 1 it catches almost ' +
+      'every animal on the bank and pushes them all into the river. Is that intended?',
+    current: 'Allowed. The drag distance is chosen per animal, from nothing up to 3, so a ' +
+      'bad catch can simply be left alone.',
   },
   {
     id: 'equipment-actions',
@@ -601,12 +673,21 @@ export const OPEN_QUESTIONS: OpenQuestion[] = [
     current: 'Only buying costs an action. Using what you already own is free.',
   },
   {
-    id: 'current-danger',
+    id: 'current-mix',
     question:
-      'The current only pushes animals sideways, so it never costs progress toward the far ' +
-      'bank. Should it also push animals backward, or is sideways displacement enough of a ' +
-      'threat on its own?',
-    current: 'Sideways only, exactly as the brief describes.',
+      'The river now pushes forward and back as well as sideways, in a 2:1:1 mix, and only ' +
+      'about 5 tiles in 70 are still water. Is that the right amount of shove, and is a ' +
+      'quarter of the river pushing animals backward too punishing?',
+    current: 'Half sideways, a quarter forward, a quarter back. A current of 4 is always ' +
+      'sideways, because forward at that strength is most of a free crossing. All of it is ' +
+      'editable on the Board tab.',
+  },
+  {
+    id: 'visible-currents',
+    question:
+      'Only 5 currents start face up. Is that too harsh with a 7 row river, given that the ' +
+      'only way to learn a tile is to put an animal on it?',
+    current: '5 face up, the rest face down until entered. Editable on the Board tab.',
   },
   {
     id: 'structures',

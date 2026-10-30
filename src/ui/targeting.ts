@@ -56,6 +56,7 @@ export type Targeting =
   | { kind: 'place-dam' }
   | { kind: 'rope'; animalId: string | null }
   | { kind: 'saboteur' }
+  | { kind: 'distraction' }
   | {
       kind: 'card'
       instanceId: string
@@ -81,6 +82,10 @@ export function targetingPrompt(targeting: Targeting): string | null {
   if (!targeting) return null
   if (targeting.kind === 'place-dam') return 'Click a river tile to build the dam on.'
   if (targeting.kind === 'saboteur') return 'Click a river tile to strengthen its current.'
+  if (targeting.kind === 'distraction') {
+    return 'Click a river tile to drop the Distraction token on. Everything near it rolls, ' +
+      'including your own animals.'
+  }
   if (targeting.kind === 'rope') {
     return targeting.animalId === null
       ? 'Click the animal you want to pull.'

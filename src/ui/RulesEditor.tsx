@@ -28,11 +28,15 @@ export interface RulesEditorProps {
   onStartNewGame: (rules: GameRules) => void
 }
 
+// In the order the weights array holds them.
+const DIRECTION_LABELS = ['Left', 'Right', 'Forward', 'Back']
+
 /** Changes that cannot take effect on a board that has already been built. */
 const BOARD_SHAPE_PATHS = [
   'board.width',
   'board.riverDepth',
-  'board.hiddenCurrentFraction',
+  'board.visibleCurrents',
+  'board.sidewaysOnlyFromStrength',
 ]
 
 function getAt(object: unknown, path: string): unknown {
@@ -521,9 +525,8 @@ function LayoutTab({
 
       <div className="section-title">Current strength mix</div>
       <div className="hint" style={{ marginBottom: 10 }}>
-        Relative weights for rolling each river tile. The defaults come from the printed tile
-        sheet, where strength 4 appears once against 46 plain tiles, which is what makes it
-        rare.
+        Relative weights for rolling each river tile. Strength 0 is deliberately rare now:
+        nearly every tile flows, which is what makes the crossing a fight.
       </div>
       {draft.board.currentStrengthWeights.map((weight, strength) => {
         const total = draft.board.currentStrengthWeights.reduce((a, b) => a + b, 0)
@@ -542,6 +545,42 @@ function LayoutTab({
               onChange={(event) =>
                 edit((r) => {
                   r.board.currentStrengthWeights[strength] = Math.max(
+                    0,
+                    Number(event.target.value),
+                  )
+                })
+              }
+            />
+            <div className="meter" style={{ flex: 1 }}>
+              <span style={{ width: `${share}%` }} />
+            </div>
+            <span className="faint" style={{ width: 40 }}>{share}%</span>
+          </div>
+        )
+      })}
+
+      <div className="section-title">Current direction mix</div>
+      <div className="hint" style={{ marginBottom: 10 }}>
+        Which way each tile pushes. Even weights give two tiles in four running sideways, one
+        forward and one back. A current at or above the sideways-only strength above ignores
+        the forward and back weights entirely.
+      </div>
+      {DIRECTION_LABELS.map((label, index) => {
+        const weights = draft.board.currentDirectionWeights
+        const total = weights.reduce((a, b) => a + b, 0)
+        const share = total > 0 ? Math.round(((weights[index] ?? 0) / total) * 100) : 0
+        return (
+          <div key={label} className="row" style={{ marginBottom: 6 }}>
+            <span style={{ width: 90, fontSize: 13 }}>{label}</span>
+            <input
+              type="number"
+              min={0}
+              max={200}
+              value={weights[index] ?? 0}
+              style={{ width: 70 }}
+              onChange={(event) =>
+                edit((r) => {
+                  r.board.currentDirectionWeights[index] = Math.max(
                     0,
                     Number(event.target.value),
                   )

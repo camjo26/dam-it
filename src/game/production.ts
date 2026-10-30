@@ -1,14 +1,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////
 // Phase A: collectors and production.
 //
-// Each player puts their collector in one of the four resource areas on the market board, then
-// a single production card is turned over. The card says what a collector in each area brings
+// Each player puts their collectors in the four resource areas on the market board, then a
+// single production card is turned over. The card says what one collector in each area brings
 // back that round. Nobody knows the card when they choose, which is the gamble.
+//
+// A player has more than one collector, and may split them across two areas or stack them both
+// on one. Every card pays every area at least one, so the choice is about how hard to back a
+// hunch rather than whether a collector will earn anything at all.
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
 import { addLog } from './log'
 import { shuffle } from './rng'
-import type { GameState, ProductionCardDef, ResourceId } from './types'
+import type { GameState, Player, ProductionCardDef, ResourceId } from './types'
 import { RESOURCE_LABELS } from './types'
 
 export function productionCard(state: GameState, id: string): ProductionCardDef | undefined {
@@ -29,8 +33,12 @@ function ensureProductionDraw(state: GameState): void {
   })
 }
 
+export function collectorsLeft(state: GameState, player: Player): number {
+  return Math.max(0, state.rules.production.collectorsPerPlayer - player.collectors.length)
+}
+
 export function allCollectorsPlaced(state: GameState): boolean {
-  return state.players.every((player) => player.collectorArea !== null)
+  return state.players.every((player) => collectorsLeft(state, player) === 0)
 }
 
 /**
@@ -57,36 +65,46 @@ export function resolveProduction(state: GameState): void {
     detail: describeYields(card),
   })
 
-  // Count collectors per area so the sharing penalty can be applied.
+  // Count collectors per area, across every player, so the sharing penalty can be applied.
   const occupancy = new Map<ResourceId, number>()
   for (const player of state.players) {
-    if (!player.collectorArea) continue
-    occupancy.set(player.collectorArea, (occupancy.get(player.collectorArea) ?? 0) + 1)
+    for (const area of player.collectors) {
+      occupancy.set(area, (occupancy.get(area) ?? 0) + 1)
+    }
   }
 
   for (const player of state.players) {
-    const area = player.collectorArea
-    if (!area) continue
-    const shared = (occupancy.get(area) ?? 1) > 1
-    const penalty = shared ? state.rules.production.sharingPenalty : 0
-    const gained = Math.max(
-      state.rules.production.minimumYield,
-      card.yields[area] - penalty,
-    )
+    if (player.collectors.length === 0) continue
+    const parts: string[] = []
 
-    player.resources[area] += gained
-    player.stats.resourcesGained[area] += gained
+    // Each collector is paid separately, so two in one area is simply paid twice.
+    for (const area of player.collectors) {
+      const shared = (occupancy.get(area) ?? 1) > 1
+      const penalty = shared ? state.rules.production.sharingPenalty : 0
+      const gained = Math.max(
+        state.rules.production.minimumYield,
+        card.yields[area] - penalty,
+      )
+      player.resources[area] += gained
+      player.stats.resourcesGained[area] += gained
+      parts.push(`${gained} ${RESOURCE_LABELS[area]}`)
+    }
 
     addLog(state, {
       kind: 'collect',
       playerId: player.id,
-      message: `${player.name} collected ${gained} ${RESOURCE_LABELS[area]}.`,
-      detail: shared
-        ? `Collector in ${RESOURCE_LABELS[area]} (shared with another player, ` +
-          `penalty ${penalty}).`
-        : `Collector in ${RESOURCE_LABELS[area]}.`,
+      message: `${player.name} collected ${parts.join(' and ')}.`,
+      detail: `${player.collectors.length} ` +
+        `${player.collectors.length === 1 ? 'collector' : 'collectors'} in ` +
+        `${describeCollectors(player)}.`,
     })
   }
+}
+
+/** "Clay and Clay" or "Wood and Reeds", as the player actually placed them. */
+export function describeCollectors(player: Player): string {
+  if (player.collectors.length === 0) return 'nothing'
+  return player.collectors.map((area) => RESOURCE_LABELS[area]).join(' and ')
 }
 
 export function describeYields(card: ProductionCardDef): string {
@@ -98,5 +116,5 @@ export function describeYields(card: ProductionCardDef): string {
 /** Clears collectors ready for the next round, if the rules re-assign them each round. */
 export function resetCollectors(state: GameState): void {
   if (!state.rules.production.reassignEachRound) return
-  for (const player of state.players) player.collectorArea = null
+  for (const player of state.players) player.collectors = []
 }

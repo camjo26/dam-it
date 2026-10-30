@@ -6,14 +6,20 @@
 import { describe, expect, it } from 'vitest'
 
 import { playOutGame } from '../src/game/runner'
-import { defaultRules } from '../src/game/rules'
+import { defaultRules, type GameRules } from '../src/game/rules'
 import { createGame } from '../src/game/setup'
 import { FACTION_IDS, type AiDifficulty } from '../src/game/types'
 
-function aiGame(seed: string, difficulty: AiDifficulty = 'normal', rounds = 10) {
+function aiGame(
+  seed: string,
+  difficulty: AiDifficulty = 'normal',
+  rounds = 10,
+  tweak?: (rules: GameRules) => void,
+) {
   const rules = defaultRules()
   rules.game.rounds = rounds
   rules.ai.stepDelayMs = 0
+  tweak?.(rules)
   return createGame({
     rules,
     seed,
@@ -71,8 +77,12 @@ describe('full games', () => {
     expect(starts.map((e) => e.round)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
   })
 
-  it('deals secret roles exactly once', () => {
-    const finished = playOutGame(aiGame('ROLES'))
+  // Roles are parked by default. This switches them on so the mechanic stays covered and
+  // can be trusted if Cam decides to bring it back.
+  it('deals secret roles exactly once when they are switched on', () => {
+    const finished = playOutGame(
+      aiGame('ROLES', 'normal', 10, (rules) => { rules.roles.enabled = true }),
+    )
     expect(finished.log.filter((e) => e.kind === 'roles-dealt')).toHaveLength(1)
     const special = finished.players.filter((p) => p.roleId !== 'none')
     expect(special).toHaveLength(1)

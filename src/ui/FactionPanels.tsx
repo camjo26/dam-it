@@ -109,8 +109,20 @@ function FactionCard({
 
       <div className="counts" style={{ marginTop: 4 }}>
         <span>Cards <b>{player.hand.length}</b></span>
-        {player.collectorArea && (
-          <span>Collector <b>{RESOURCE_LABELS[player.collectorArea as ResourceId]}</b></span>
+        {player.collectors.length > 0 && (
+          <span>
+            Collectors{' '}
+            <b>
+              {player.collectors
+                .map((area) => RESOURCE_LABELS[area as ResourceId])
+                .join(' + ')}
+            </b>
+          </span>
+        )}
+        {state.rules.distraction.enabled && (
+          <span title="Unplayed Distraction tokens">
+            Distraction <b>{player.distractionTokens}</b>
+          </span>
         )}
       </div>
 

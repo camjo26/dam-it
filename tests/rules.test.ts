@@ -145,7 +145,7 @@ describe('the current', () => {
   })
 
   it('reveals a hidden current when an animal enters the tile', () => {
-    let state = makeGame({ currentStrength: 3, hiddenFraction: 1 })
+    let state = makeGame({ currentStrength: 3, visibleCurrents: 0 })
     state = startPlayerTurns(state)
     const duck = animalsOf(state, 'ducks')[0]
 
@@ -519,6 +519,8 @@ describe('missions and roles', () => {
   it('deals exactly one special role after the configured round', () => {
     let state = makeGame({ tweak: (rules) => {
       rules.game.rounds = 3
+      // Roles are parked by default, so this switches the whole mechanic back on.
+      rules.roles.enabled = true
       rules.roles.dealAfterRound = 2
     } })
 
@@ -534,7 +536,7 @@ describe('missions and roles', () => {
   })
 
   it('pays the Champion only on a unique lead and enough animals across', () => {
-    const state = makeGame()
+    const state = makeGame({ tweak: (rules) => { rules.roles.enabled = true } })
     const ducks = playerOf(state, 'ducks')
     const swans = playerOf(state, 'swans')
     ducks.roleId = 'champion'
@@ -560,7 +562,7 @@ describe('missions and roles', () => {
   })
 
   it('pays the Hoarder only on a unique resource lead', () => {
-    const state = makeGame()
+    const state = makeGame({ tweak: (rules) => { rules.roles.enabled = true } })
     const ducks = playerOf(state, 'ducks')
     ducks.roleId = 'hoarder'
     for (const player of state.players) player.missionId = null

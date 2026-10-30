@@ -54,7 +54,8 @@ function createPlayer(setup: PlayerSetup, index: number, rules: GameRules): Play
     missionId: null,
     missionComplete: false,
     roleId: null,
-    collectorArea: null,
+    collectors: [],
+    distractionTokens: rules.distraction.enabled ? rules.distraction.tokensPerPlayer : 0,
     movementRemaining: 0,
     actionsRemaining: 0,
     powerCardsPlayedThisRound: 0,
@@ -93,7 +94,6 @@ function createAnimals(player: Player, rules: GameRules, boardWidth: number): An
       movedByCurrentCount: 0,
       islandsVisited: [],
       crossedWhirlpool: false,
-      distracted: false,
       finishedOnRound: null,
     })
   }
@@ -146,6 +146,7 @@ export function createGame(options: NewGameOptions): GameState {
     tileModifiers: [],
     pendingWhirlpoolRerolls: [],
     saboteurUsesThisRound: {},
+    pendingDistraction: null,
     currentSteps: [],
     currentResolvedForRound: null,
     resourcesCollectedForRound: null,

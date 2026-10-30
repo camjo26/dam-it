@@ -34,8 +34,6 @@ export type EdgeBehaviour = 'stop-at-edge' | 'wrap-around'
 
 export type DamCalmAxis = 'vertical' | 'horizontal'
 
-export type DistractionScope = 'one-animal' | 'all-animals'
-
 export interface IslandSpec {
   col: number
   row: number
@@ -90,8 +88,15 @@ export interface GameRules {
     islandsBlockCurrent: boolean
     /** Relative weights for rolling each river tile's current strength, index 0..4. */
     currentStrengthWeights: number[]
-    /** Share of river tiles whose current starts hidden, 0..1. */
-    hiddenCurrentFraction: number
+    /** Relative weights for rolling a tile's direction: left, right, forward, back. */
+    currentDirectionWeights: number[]
+    /**
+     * How many flowing river tiles start face up. Every other current is hidden until an
+     * animal stands on it, so the river has to be learned the hard way.
+     */
+    visibleCurrents: number
+    /** Strength at or above which a current may only run sideways, never up or down the river. */
+    sidewaysOnlyFromStrength: number
   }
   movement: {
     allowDiagonal: boolean
@@ -99,6 +104,7 @@ export interface GameRules {
     costPerTile: number
   }
   current: {
+    /** The way the river runs as a whole. Each tile rolls its own direction from this. */
     direction: CurrentDirection
     edgeBehaviour: EdgeBehaviour
     resolutionOrder: CurrentOrderId
@@ -117,14 +123,24 @@ export interface GameRules {
   factions: Record<FactionId, FactionRules>
   distraction: {
     enabled: boolean
-    appliesTo: FactionId[]
+    /** Tokens each player starts the game with. */
+    tokensPerPlayer: number
+    playUsesAction: boolean
+    /** Every animal this far from the token, or nearer, must roll. */
+    radius: number
     dieSides: number
-    /** Rolling this value or higher avoids distraction. */
+    /** Rolling this value or higher shrugs the distraction off. */
     avoidOnRoll: number
-    scope: DistractionScope
+    /** Factions that need a higher roll than everyone else, and the roll they need. */
+    hardToDistract: FactionId[]
+    hardAvoidOnRoll: number
+    /** Squares the player who placed the token may drag each distracted animal. */
+    pullDistance: number
   }
   production: {
     cards: ProductionCardDef[]
+    /** Collectors each player places in the Resource Phase. They may share one area. */
+    collectorsPerPlayer: number
     /** Subtracted from each player's yield when more than one collector shares an area. */
     sharingPenalty: number
     minimumYield: number
@@ -193,32 +209,41 @@ const SWAN_COLOUR = '#e6eef7'
 const FROG_COLOUR = '#5fb14e'
 const BEAVER_COLOUR = '#a9693d'
 
-// Tile mix taken from the printed tile sheet: 46 plain, 12 x current 1, 16 x current 2,
-// 8 x current 3 and a single current 4, which is what makes strength 4 rare.
-const CURRENT_WEIGHTS: number[] = [46, 12, 16, 8, 1]
+// Nearly every tile now flows. Still water is the exception rather than the rule, which is
+// what makes the crossing a fight rather than a walk. Strength 4 stays the rarest, as the
+// printed tile sheet has only one of them.
+const CURRENT_WEIGHTS: number[] = [5, 32, 30, 22, 11]
+
+// Two tiles in four push sideways, one pushes forward and one pushes back, so the river
+// shoves an animal off its line as often as it costs or gives it ground.
+const DIRECTION_WEIGHTS: number[] = [1, 1, 1, 1]
 
 const DEFAULT_WIDTH = 10
 const DEFAULT_DEPTH = 7
-const DEFAULT_HIDDEN_FRACTION = 0.35
+const DEFAULT_VISIBLE_CURRENTS = 5
+const SIDEWAYS_ONLY_FROM = 4
 
 function bag(wood = 0, stone = 0, clay = 0, reeds = 0): ResourceBag {
   return { wood, stone, clay, reeds }
 }
 
-// Provisional production deck. Each card shows what a collector in that area produces.
+// Every card pays every area at least one, so a collector is never wasted. The name is the
+// shape of the card: whatever it is generous with is what the season is called.
 export const DEFAULT_PRODUCTION_CARDS: ProductionCardDef[] = [
-  { id: 'spring-flood', name: 'Spring Flood', yields: bag(3, 1, 1, 2), copies: 2 },
-  { id: 'dry-spell', name: 'Dry Spell', yields: bag(1, 1, 0, 1), copies: 2 },
-  { id: 'timber-haul', name: 'Timber Haul', yields: bag(3, 0, 1, 1), copies: 2 },
-  { id: 'rockfall', name: 'Rockfall', yields: bag(0, 3, 1, 0), copies: 2 },
-  { id: 'clay-banks', name: 'Clay Banks', yields: bag(1, 0, 3, 1), copies: 2 },
-  { id: 'reed-beds', name: 'Reed Beds', yields: bag(1, 1, 0, 3), copies: 2 },
-  { id: 'steady-season', name: 'Steady Season', yields: bag(2, 2, 2, 2), copies: 2 },
-  { id: 'shallow-water', name: 'Shallow Water', yields: bag(1, 2, 2, 0), copies: 2 },
-  { id: 'storm-debris', name: 'Storm Debris', yields: bag(2, 1, 0, 2), copies: 2 },
-  { id: 'quarry-day', name: 'Quarry Day', yields: bag(0, 2, 2, 1), copies: 2 },
-  { id: 'lean-weeks', name: 'Lean Weeks', yields: bag(1, 0, 1, 1), copies: 2 },
-  { id: 'rich-delta', name: 'Rich Delta', yields: bag(2, 1, 2, 1), copies: 2 },
+  { id: 'forests-are-full', name: 'Forests Are Full', yields: bag(3, 1, 1, 1), copies: 2 },
+  { id: 'the-quarry-rings', name: 'The Quarry Rings', yields: bag(1, 3, 1, 1), copies: 2 },
+  { id: 'banks-run-thick', name: 'Banks Run Thick', yields: bag(1, 1, 3, 1), copies: 2 },
+  { id: 'reeds-in-flower', name: 'Reeds in Flower', yields: bag(1, 1, 1, 3), copies: 2 },
+  { id: 'spring-flood', name: 'Spring Flood', yields: bag(2, 1, 2, 3), copies: 2 },
+  { id: 'after-the-storm', name: 'After the Storm', yields: bag(3, 2, 1, 2), copies: 2 },
+  { id: 'low-water', name: 'Low Water', yields: bag(1, 2, 3, 1), copies: 2 },
+  { id: 'a-good-season', name: 'A Good Season', yields: bag(2, 2, 2, 2), copies: 2 },
+  { id: 'lean-weeks', name: 'Lean Weeks', yields: bag(1, 1, 1, 1), copies: 2 },
+  { id: 'timber-and-stone', name: 'Timber and Stone', yields: bag(3, 3, 1, 1), copies: 1 },
+  { id: 'the-rich-delta', name: 'The Rich Delta', yields: bag(2, 1, 3, 2), copies: 2 },
+  { id: 'cold-snap', name: 'Cold Snap', yields: bag(1, 2, 1, 2), copies: 2 },
+  { id: 'the-flood-plain', name: 'The Flood Plain', yields: bag(4, 1, 2, 1), copies: 1 },
+  { id: 'rockfall', name: 'Rockfall', yields: bag(1, 4, 1, 2), copies: 1 },
 ]
 
 // The twelve printed Power Cards. Three copies of each except River Shift and Whirlpool,
@@ -422,7 +447,9 @@ export const DEFAULT_RULES: GameRules = {
     ],
     islandsBlockCurrent: true,
     currentStrengthWeights: CURRENT_WEIGHTS,
-    hiddenCurrentFraction: DEFAULT_HIDDEN_FRACTION,
+    currentDirectionWeights: DIRECTION_WEIGHTS,
+    visibleCurrents: DEFAULT_VISIBLE_CURRENTS,
+    sidewaysOnlyFromStrength: SIDEWAYS_ONLY_FROM,
   },
   movement: {
     allowDiagonal: false,
@@ -495,14 +522,20 @@ export const DEFAULT_RULES: GameRules = {
     },
   },
   distraction: {
-    enabled: false,
-    appliesTo: ['ducks'],
+    enabled: true,
+    tokensPerPlayer: 1,
+    playUsesAction: true,
+    radius: 3,
     dieSides: 6,
-    avoidOnRoll: 6,
-    scope: 'one-animal',
+    avoidOnRoll: 4,
+    // Ducks are the easiest birds on the river to distract: nothing but a 6 will do.
+    hardToDistract: ['ducks'],
+    hardAvoidOnRoll: 6,
+    pullDistance: 3,
   },
   production: {
     cards: DEFAULT_PRODUCTION_CARDS,
+    collectorsPerPlayer: 2,
     sharingPenalty: 0,
     minimumYield: 0,
     reassignEachRound: true,
@@ -560,7 +593,9 @@ export const DEFAULT_RULES: GameRules = {
     cards: DEFAULT_MISSIONS,
   },
   roles: {
-    enabled: true,
+    // Parked, not deleted. The powers and the scoring were never settled, so the game is
+    // being tested without them; switching this back on restores the whole mechanic.
+    enabled: false,
     dealAfterRound: 5,
     bonusPoints: 6,
     minAnimalsAcross: 2,

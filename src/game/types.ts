@@ -29,7 +29,22 @@ export type TileKind = 'bank-top' | 'bank-bottom' | 'river' | 'island' | 'whirlp
 
 export type IslandSize = 'small' | 'large'
 
-export type CurrentDirection = 'right' | 'left'
+/**
+ * Which way a tile's current pushes. Forward is toward the far bank and back is toward the
+ * starting bank, so a tile can cost an animal its progress rather than only its position.
+ */
+export type CurrentDirection = 'right' | 'left' | 'forward' | 'back'
+
+export const CURRENT_DIRECTIONS: CurrentDirection[] = ['left', 'right', 'forward', 'back']
+
+export const CURRENT_VECTORS: Record<CurrentDirection, { dc: number; dr: number }> = {
+  left: { dc: -1, dr: 0 },
+  right: { dc: 1, dr: 0 },
+  forward: { dc: 0, dr: 1 },
+  back: { dc: 0, dr: -1 },
+}
+
+export const SIDEWAYS_DIRECTIONS: CurrentDirection[] = ['left', 'right']
 
 export interface Tile {
   id: string
@@ -39,6 +54,8 @@ export interface Tile {
   islandSize?: IslandSize
   /** Base current strength of this tile, 0..4. Banks and islands are normally 0. */
   current: number
+  /** Which way this tile's current pushes. Meaningless when `current` is 0. */
+  direction: CurrentDirection
   /** Hidden currents are not shown to players until an animal enters the tile. */
   hidden: boolean
   revealed: boolean
@@ -71,8 +88,6 @@ export interface Animal {
   islandsVisited: string[]
   /** Set when the animal has been through a whirlpool. Feeds the Risk Taker mission. */
   crossedWhirlpool: boolean
-  /** Blocked from moving this turn by the Ducks' Distraction rule. */
-  distracted: boolean
   finishedOnRound: number | null
 }
 
@@ -126,7 +141,10 @@ export interface Player {
   missionId: string | null
   missionComplete: boolean
   roleId: RoleId | null
-  collectorArea: ResourceId | null
+  /** Areas this player's collectors are sitting in. Two collectors may share one area. */
+  collectors: ResourceId[]
+  /** Unplayed Distraction tokens. One per player per game by default. */
+  distractionTokens: number
   movementRemaining: number
   actionsRemaining: number
   powerCardsPlayedThisRound: number
@@ -217,9 +235,34 @@ export interface CurrentStep {
 export interface ProductionCardDef {
   id: string
   name: string
-  /** Resources produced for a collector sitting in each area. */
+  /** Resources produced for each collector sitting in that area. Never below 1. */
   yields: ResourceBag
   copies: number
+}
+
+/** One animal's die roll against a Distraction token. */
+export interface DistractionRoll {
+  animalId: string
+  playerId: string
+  factionId: FactionId
+  roll: number
+  /** The roll this animal needed to shrug the distraction off. */
+  neededRoll: number
+  distracted: boolean
+  /** Squares this animal has already been dragged toward the token. */
+  movedSoFar: number
+}
+
+/**
+ * A played Distraction token waiting to be resolved. The dice are rolled when the token
+ * lands, so the player sees who it caught before deciding how far to drag each of them,
+ * and no other action can be taken until it is finished.
+ */
+export interface PendingDistraction {
+  placerId: string
+  col: number
+  row: number
+  rolls: DistractionRoll[]
 }
 
 export interface ProductionState {
@@ -275,6 +318,8 @@ export interface GameState {
   pendingWhirlpoolRerolls: string[]
   /** Saboteur ability uses spent this round, keyed by player id. */
   saboteurUsesThisRound: Record<string, number>
+  /** A Distraction token that has been played and whose drags are still being chosen. */
+  pendingDistraction: PendingDistraction | null
   /** Populated while the Current Phase is being stepped through for display. */
   currentSteps: CurrentStep[]
   /** Guards against the Current Phase being resolved twice in one round. */
