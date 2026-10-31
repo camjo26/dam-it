@@ -27,7 +27,10 @@ Taken from the brief and from the printed components in this folder.
   separately. Half the production deck pays nothing at all in one area, and only a card paying
   4 somewhere else is allowed to do that.
 - Four animals fit on a river square. The limit binds players, not the river.
-- An animal the current carries past the left or right edge is swept away and out of the game.
+- An animal the current carries past the left or right edge is swept away and out of the game,
+  including one already standing on the edge with the current pointing at it. Resisting the
+  current makes the push smaller and so does not save it; a dam, an island, an anchor or a
+  Current Shield does, because those make it ignore the current entirely.
 - Every range is counted in straight lines along the rows and columns, never diagonally.
 - Players may trade resources and Power Cards with each other.
 - Every player has 1 Distraction token for the game.

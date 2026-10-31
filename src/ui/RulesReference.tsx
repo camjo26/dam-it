@@ -152,8 +152,16 @@ function HowToPlay({ rules }: { rules: GameRules }) {
         </li>
         <li>
           <b>The edges are fatal.</b> If the current carries an animal past the left or right
-          side of the board it is <b>swept away and out of the game</b>, scoring nothing. Only
-          the river can do this: your own moves, a rope and a card all stop at the edge.
+          side of the board it is <b>swept away and out of the game</b>, scoring nothing. An
+          animal already standing on the edge with the current pointing at it goes over, at
+          any strength. Only the river can do this: your own moves, a rope and a card all
+          stop at the edge.
+        </li>
+        <li>
+          Resisting the current makes a push <b>smaller</b>, not impossible, so at the edge it
+          does not save you. A <b>dam</b>, an <b>island</b>, an <b>anchor</b> or a{' '}
+          <b>Current Shield</b> does: those make an animal ignore the current completely, and
+          an animal ignoring the current is not standing in it to be carried off.
         </li>
         <li>
           A river square holds <b>{rules.board.maxAnimalsPerTile} animals</b>. That stops you

@@ -83,6 +83,12 @@ export function calmingDam(state: GameState, animal: Animal): Dam | null {
 export interface CurrentAssessment {
   baseStrength: number
   effectiveStrength: number
+  /**
+   * The strength the water still had before the animal's own faction resistance was taken
+   * off it. The two differ only for a faction that resists, and the gap matters at the edge:
+   * see the note on being pressed against the bank in resolveCurrentPhase.
+   */
+  strengthBeforeResistance: number
   direction: CurrentDirection
   reasons: string[]
   immune: boolean
@@ -96,8 +102,8 @@ export function assessCurrent(state: GameState, animal: Animal): CurrentAssessme
   let direction = rules.current.direction
 
   if (!tile) {
-    return { baseStrength: 0, effectiveStrength: 0, direction, reasons: ['Off board.'],
-      immune: true }
+    return { baseStrength: 0, effectiveStrength: 0, strengthBeforeResistance: 0, direction,
+      reasons: ['Off board.'], immune: true }
   }
 
   const baseStrength = tile.current
@@ -128,7 +134,8 @@ export function assessCurrent(state: GameState, animal: Animal): CurrentAssessme
   // 3. Islands.
   if (tile.kind === 'island' && rules.board.islandsBlockCurrent) {
     reasons.push('Sheltered on an island, so the current does not reach it.')
-    return { baseStrength, effectiveStrength: 0, direction, reasons, immune: true }
+    return { baseStrength, effectiveStrength: 0, strengthBeforeResistance: 0, direction,
+      reasons, immune: true }
   }
 
   // 4. Dams.
@@ -136,20 +143,26 @@ export function assessCurrent(state: GameState, animal: Animal): CurrentAssessme
   if (dam) {
     const owner = state.players.find((p) => p.id === dam.ownerPlayerId)
     reasons.push(`Calmed by ${owner ? owner.name : 'a'} dam at ${coord(dam.col, dam.row)}.`)
-    return { baseStrength, effectiveStrength: 0, direction, reasons, immune: true }
+    return { baseStrength, effectiveStrength: 0, strengthBeforeResistance: 0, direction,
+      reasons, immune: true }
   }
 
   // 5. Anchor and Current Shield.
   if (animal.anchoredThroughRound !== null && animal.anchoredThroughRound >= state.round) {
     reasons.push('Anchored, so it ignores the current this round.')
-    return { baseStrength, effectiveStrength: 0, direction, reasons, immune: true }
+    return { baseStrength, effectiveStrength: 0, strengthBeforeResistance: 0, direction,
+      reasons, immune: true }
   }
   if (animal.shieldedForRound === state.round) {
     reasons.push('Current Shield, so it ignores the current this phase.')
-    return { baseStrength, effectiveStrength: 0, direction, reasons, immune: true }
+    return { baseStrength, effectiveStrength: 0, strengthBeforeResistance: 0, direction,
+      reasons, immune: true }
   }
 
-  // 6. Swan resistance.
+  // 6. Swan resistance. Noted before it is applied, because resistance only makes a push
+  //    smaller: unlike a dam, an island, an anchor or a shield it never makes an animal
+  //    immune, and at the edge a smaller push is still a push off the board.
+  const strengthBeforeResistance = strength
   const faction = rules.factions[animal.factionId]
   if (faction.currentResistance > 0 && strength > 0) {
     const before = strength
@@ -157,7 +170,8 @@ export function assessCurrent(state: GameState, animal: Animal): CurrentAssessme
     reasons.push(`${faction.name} resist the current: ${before} reduced to ${strength}.`)
   }
 
-  return { baseStrength, effectiveStrength: strength, direction, reasons, immune: false }
+  return { baseStrength, effectiveStrength: strength, strengthBeforeResistance, direction,
+    reasons, immune: false }
 }
 
 function orderedAnimals(state: GameState): Animal[] {
@@ -317,7 +331,23 @@ export function resolveCurrentPhase(state: GameState): CurrentStep[] {
         }
       }
     } else if (!assessment.immune) {
-      reasons.push('Still water, so it did not move.')
+      // Water that was only reduced to nothing by the animal's own resistance still presses
+      // it against the bank, and at the edge that is enough. Resistance makes a push
+      // smaller; it is not the immunity a dam, an island, an anchor or a shield gives.
+      const { dc } = CURRENT_VECTORS[assessment.direction]
+      const pressedOff =
+        (dc < 0 && animal.col === 0) || (dc > 0 && animal.col === state.board.width - 1)
+      if (
+        assessment.strengthBeforeResistance > 0 &&
+        pressedOff &&
+        rules.current.edgeBehaviour === 'swept-away'
+      ) {
+        loseAnimal(state, animal)
+        reasons.push('Held against the edge by a current it could only partly resist, and ' +
+          'carried over it.')
+      } else {
+        reasons.push('Still water, so it did not move.')
+      }
     }
 
     if (totalMoved > 0) {

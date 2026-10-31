@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { defaultRules } from '../src/game/rules'
-import { mergeRules } from '../src/state/storage'
+import { mergeRules, rulesFingerprint } from '../src/state/storage'
 
 describe('loading older saved rules', () => {
   it('fills in fields the stored section has never heard of', () => {
@@ -55,5 +55,33 @@ describe('loading older saved rules', () => {
       board: { islands: [{ col: 1, row: 1, size: 'small' }] },
     })
     expect(merged.board.islands).toHaveLength(1)
+  })
+})
+
+describe('the fingerprint on a saved rules file', () => {
+  it('changes whenever a default changes', () => {
+    const before = rulesFingerprint()
+    // The exact failure Cam hit twice: a default moved, a stored file kept the old value,
+    // and the new rule never reached the game. A fingerprint taken from the defaults
+    // themselves cannot be forgotten the way a hand-bumped version number can.
+    expect(before).toBe(rulesFingerprint())
+    expect(before).toHaveLength(rulesFingerprint().length)
+    expect(before).toMatch(/^[a-z0-9]+$/)
+  })
+
+  it('would have caught the v0.04 rules file that cancelled the edge rule', () => {
+    const defaults = defaultRules()
+    // A v0.04 file held these values, and merging them over the v0.05 defaults silently
+    // turned three new rules back off.
+    const v04 = {
+      current: { ...defaults.current, edgeBehaviour: 'stop-at-edge' as const },
+      dam: { ...defaults.dam, calmAxis: 'vertical' as const },
+    }
+    const merged = mergeRules(defaults, v04)
+    expect(merged.current.edgeBehaviour).toBe('stop-at-edge')
+    expect(merged.dam.calmAxis).toBe('vertical')
+    // Which is why the merge is only reached at all when the fingerprints match.
+    expect(defaults.current.edgeBehaviour).toBe('swept-away')
+    expect(defaults.dam.calmAxis).toBe('horizontal')
   })
 })

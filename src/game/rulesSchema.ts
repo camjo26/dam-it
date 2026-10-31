@@ -738,8 +738,10 @@ export const OPEN_QUESTIONS: OpenQuestion[] = [
       'The river now carries an animal over the side of the board and out of the game for ' +
       'good. Is losing animals outright the right penalty, or should a strong current near ' +
       'an edge cost something less final?',
-    current: 'Swept away and gone. Only the river does it: walking, a rope and a card all ' +
-      'stop at the edge instead.',
+    current: 'Swept away and gone, at any strength, including from the edge square itself. ' +
+      'Resisting the current only makes the push smaller, so it does not save an animal ' +
+      'there, but a dam, an island, an anchor or a shield does. Only the river does it: ' +
+      'walking, a rope and a card all stop at the edge instead.',
   },
   {
     id: 'trade-scope',

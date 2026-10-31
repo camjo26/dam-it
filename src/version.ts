@@ -1,4 +1,4 @@
-export const VERSION = '0.05'
+export const VERSION = '0.06'
 
 export interface ChangelogEntry {
   version: string
@@ -8,6 +8,20 @@ export interface ChangelogEntry {
 
 // Newest first.
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.06',
+    date: '2026-10-31',
+    notes: [
+      'Fixed: a saved rules file from an older build was overriding new defaults, so the '
+        + 'edge rule, the dam axis and both new card decks never reached you. Saved rules '
+        + 'and games are now stamped with the rules they were written against, and dropped '
+        + 'when the rules move on.',
+      'An animal standing on the edge with the current pointing at it is now always carried '
+        + 'over, at every strength. Resisting the current makes the push smaller, which at '
+        + 'the edge no longer saves you - but a dam, an island, an anchor or a shield still '
+        + 'does.',
+    ],
+  },
   {
     version: '0.05',
     date: '2026-10-31',

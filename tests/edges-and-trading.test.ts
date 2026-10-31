@@ -68,6 +68,49 @@ describe('swept over the edge', () => {
     expect(after.col).toBe(0)
   })
 
+  it('takes every faction over, at every strength, from the edge square itself', () => {
+    // The case Cam kept seeing: already standing on the edge with the arrow pointing at it.
+    for (const strength of [1, 2, 3, 4]) {
+      for (const faction of ['ducks', 'swans', 'frogs', 'beavers'] as const) {
+        let state = makeGame({ currentStrength: strength, directionWeights: [1, 0, 0, 0] })
+        state = startPlayerTurns(state)
+        const animal = animalsOf(state, faction)[0]
+        put(state, state.animals.find((a) => a.id === animal.id)!, 0, 3)
+        state = must(reachCurrentPhase(state), { type: 'resolve-current' })
+        expect(
+          state.animals.find((a) => a.id === animal.id)!.status,
+          `${faction} on a current of ${strength}`,
+        ).toBe('lost')
+      }
+    }
+  })
+
+  it('does not take an animal a dam, an island or an anchor is actually sheltering', () => {
+    // Resistance only makes a push smaller, but these make an animal immune, and immunity
+    // has to mean immunity or an anchor at the edge would be worthless.
+    let state = makeGame({
+      currentStrength: 3,
+      directionWeights: [1, 0, 0, 0],
+      islands: [{ col: 0, row: 3, size: 'small' }],
+    })
+    state = startPlayerTurns(state)
+    const beaver = animalsOf(state, 'beavers')[0]
+    put(state, state.animals.find((a) => a.id === beaver.id)!, 0, 3)
+
+    state = must(reachCurrentPhase(state), { type: 'resolve-current' })
+    expect(state.animals.find((a) => a.id === beaver.id)!.status).not.toBe('lost')
+  })
+
+  it('leaves still water alone at the edge', () => {
+    let state = makeGame({ currentStrength: 0, directionWeights: [1, 0, 0, 0] })
+    state = startPlayerTurns(state)
+    const beaver = animalsOf(state, 'beavers')[0]
+    put(state, state.animals.find((a) => a.id === beaver.id)!, 0, 3)
+
+    state = must(reachCurrentPhase(state), { type: 'resolve-current' })
+    expect(state.animals.find((a) => a.id === beaver.id)!.status).not.toBe('lost')
+  })
+
   it('never lets a rope push an animal over the side', () => {
     const state = startPlayerTurns(makeGame())
     playerOf(state, 'ducks').equipment.rope = 1

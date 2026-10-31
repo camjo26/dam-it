@@ -56,12 +56,27 @@ function write<T>(key: string, payload: T): boolean {
 
 export function saveGame(state: GameState): boolean {
   // The undo history is working memory, not progress, and it is by far the largest field.
-  return write(GAME_KEY, { ...state, undoStack: [] })
+  return write(GAME_KEY, {
+    fingerprint: rulesFingerprint(),
+    state: { ...state, undoStack: [] },
+  })
 }
 
 export function loadGame(): GameState | null {
-  const state = read<GameState>(GAME_KEY)
-  if (!state) return null
+  const saved = read<{ fingerprint?: string; state?: GameState }>(GAME_KEY)
+  if (!saved) return null
+
+  // A game carries the rules it was started with, which is the point of it. That also means
+  // a game in progress goes on being played under rules that no longer exist, which in a
+  // build whose whole job is testing rule changes is worse than losing the game. So when the
+  // defaults move, the game in progress goes with them.
+  if (saved.fingerprint !== rulesFingerprint() || !saved.state) {
+    console.info('The rules have changed since this game was saved, so it was not resumed.')
+    clearGame()
+    return null
+  }
+
+  const state = saved.state
   if (!state.rules) return null
 
   // A save from an older build may be missing newer fields, so fill in what is needed.
@@ -97,7 +112,7 @@ export function clearGame(): void {
 }
 
 export function saveRules(rules: GameRules): boolean {
-  return write(RULES_KEY, rules)
+  return write(RULES_KEY, { fingerprint: rulesFingerprint(), rules })
 }
 
 /**
@@ -122,10 +137,45 @@ export function mergeRules<T>(defaults: T, stored: unknown): T {
   return out as T
 }
 
+/**
+ * A short fingerprint of the default rules.
+ *
+ * Saved rules are merged over the defaults, so a stored value always wins. That is right for
+ * a setting Cam has deliberately tuned, and wrong for every default that has since changed
+ * underneath it: a rules file written before the river swept animals off the board carried
+ * `edgeBehaviour: 'stop-at-edge'` forward and quietly cancelled the new rule, along with the
+ * dam axis and both card decks.
+ *
+ * Relying on remembering to bump a version number is what let that happen twice. This is
+ * derived from the defaults themselves, so any change to them invalidates the saved file
+ * automatically and the newest rules always win.
+ */
+export function rulesFingerprint(): string {
+  const text = JSON.stringify(defaultRules())
+  let h = 2166136261
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return (h >>> 0).toString(36)
+}
+
+interface StoredRules {
+  fingerprint?: string
+  rules?: GameRules
+}
+
 export function loadRules(): GameRules {
-  const stored = read<GameRules>(RULES_KEY)
+  const stored = read<StoredRules>(RULES_KEY)
   if (!stored) return defaultRules()
-  return mergeRules(defaultRules(), stored)
+
+  // Anything written before the fingerprint existed, or against different defaults, is from
+  // an older set of rules and is dropped rather than allowed to override the new ones.
+  if (stored.fingerprint !== rulesFingerprint() || !stored.rules) {
+    console.info('The default rules have changed, so the saved rules were not carried over.')
+    return defaultRules()
+  }
+  return mergeRules(defaultRules(), stored.rules)
 }
 
 export function clearRules(): void {
