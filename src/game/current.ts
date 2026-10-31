@@ -200,7 +200,13 @@ function orderedAnimals(state: GameState): Animal[] {
   return eligible.sort(compare)
 }
 
-/** Pushes an animal in a straight line, recording every tile it passes through. */
+/**
+ * Pushes an animal in a straight line, recording every tile it passes through.
+ *
+ * The square limit does not apply here. The current takes everything standing on a tile, so
+ * a stack driven into the bank piles up past the limit rather than some of it being left
+ * behind, and nothing in the game decides who would be left. See MAX_ANIMALS_NOTE.
+ */
 function push(
   state: GameState,
   animal: Animal,

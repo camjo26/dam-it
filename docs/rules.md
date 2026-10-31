@@ -24,7 +24,9 @@ Taken from the brief and from the printed components in this folder.
 - Only 5 currents start face up. Every other tile is face down until an animal enters it, and
   then it stays turned over for everybody.
 - Each player places 2 collectors in Phase A, in two areas or stacked on one, and each is paid
-  separately. Every production card pays every area at least 1.
+  separately. Half the production deck pays nothing at all in one area, and only a card paying
+  4 somewhere else is allowed to do that.
+- Four animals fit on a river square. The limit binds players, not the river.
 - Every player has 1 Distraction token for the game.
 
 **Factions**
@@ -84,6 +86,8 @@ Chosen so the game is playable. Each is deliberately simple and reversible.
 | Current direction mix | half sideways, a quarter forward, a quarter back | Asked for directly, to make the river push animals around rather than only along. | `board.currentDirectionWeights` |
 | Strength 4 is sideways only | yes | A forward 4 is most of a free crossing and a backward 4 undoes most of a game's work. | `board.sidewaysOnlyFromStrength` |
 | Collectors per player | 2 | Asked for directly. They may share an area, and each is paid in full. | `production.collectorsPerPlayer` |
+| Animals per river square | 4 | Asked for directly. It binds anything a player chooses to do and not the current, which carries every animal on a tile, so a stack driven into the bank piles up past four. Banks are exempt, since every animal starts stacked on the top bank. | `board.maxAnimalsPerTile` |
+| Blanks on production cards | half the deck, each paying 4 elsewhere | Asked for directly: a card may only pay nothing in an area if it is generous in another. | `production.cards` |
 | Dam calms | its own square plus 1 above and 1 below | The card says "above and below the dam". On a board where the river runs left to right, that reads as the squares up and down the board. The axis is switchable. | `dam.calmAxis`, `dam.calmRadius` |
 | Destroying a dam | 2 Stone | The brief says this was discussed as 2 or 3 and never settled. | `dam.destroyCost` |
 | Islands shelter from the current | yes | The printed rules say islands are "not automatically safe", which is ambiguous. | `board.islandsBlockCurrent` |
@@ -128,54 +132,56 @@ all of them are listed in the app under **How to play > Open questions**.
 7. **Does using a raft, rope or anchor cost an action, or only buying it?**
 8. **Is the direction mix right?** Half sideways, a quarter forward, a quarter back. A quarter
    of the river actively undoing progress may be too punishing, or not punishing enough.
-9. **Are 5 face-up currents too few** on a river 7 rows deep, when the only way to learn a
-   tile is to put an animal on it?
-10. **Does a raft or a rope count as a "structure" for the Builder mission?**
+9. **Should the river obey the four-to-a-square limit too?** It does not at the moment, so
+   animals shoved into the bank pile up past four. Making it obey would mean deciding which
+   animals get left behind, and nothing in the game says who would choose.
+10. **Are 5 face-up currents too few** on a river 7 rows deep, when the only way to learn a
+    tile is to put an animal on it?
+11. **Does a raft or a rope count as a "structure" for the Builder mission?**
 
 ---
 
 ## What the numbers say
 
-From `pnpm sim -- --games 300`, v0.03 rules, Normal opponents. Raw data in
-`docs/balance/v0.03.csv`. The v0.02 run it is being compared against is in
-`docs/balance/baseline.csv`.
+From `pnpm sim -- --games 300`, v0.04 rules, Normal opponents, none failed. Raw data in
+`docs/balance/v0.04.csv`, with the two runs before it in `v0.03.csv` and `baseline.csv`.
 
 | Faction | Win % | Score | Animals across | Mission % | Built | Carried by the current |
 |---|---|---|---|---|---|---|
-| Ducks | 20 | 5.07 | 3.53 | 35 | 7.5 | 17.3 |
-| Swans | 15 | 4.87 | 3.67 | 28 | 7.4 | 6.4 |
-| Frogs | 20 | 4.83 | 2.99 | 43 | 6.5 | 16.3 |
-| Beavers | 26 | 5.36 | 3.53 | 41 | 9.0 | 17.5 |
+| Ducks | 24 | 5.28 | 3.66 | 37 | 7.2 | 17.2 |
+| Swans | 16 | 4.95 | 3.56 | 32 | 7.1 | 6.6 |
+| Frogs | 19 | 5.32 | 3.32 | 46 | 6.8 | 14.8 |
+| Beavers | 21 | 5.09 | 3.51 | 35 | 8.9 | 16.3 |
 
-**Two of the three findings from v0.02 are fixed.**
+**All three findings from v0.02 are now fixed or improving.**
 
-**Crossings are up, from about 2.5 to about 3.4.** A quarter of the river now pushes forward,
-so the current gives ground back as well as taking it, and an animal no longer depends only on
-its 3 movement a round. The depth-5 and 14-round experiments are no longer needed to make the
-race work.
+**Crossings are up, from about 2.5 to about 3.5.** A quarter of the river pushes forward, so
+the current gives ground back as well as taking it. The depth-5 and 14-round experiments are
+no longer needed to make the race work.
 
-**Power Cards are bought now**, where before it was 0.07 a game. Frogs buy about 3, everyone
-else under 1. Two collectors and a deck that pays every area roughly doubled income.
+**Power Cards get bought**, where before it was 0.07 a game. Frogs buy about 3 with their
+second action; everyone else about 1.
 
-**Three things worth a look.**
+**The factions are closer together.** The win spread was 19 to 24 in v0.02, opened to 15 to 26
+in v0.03 when the river got fierce, and is 16 to 24 now. Four to a square is what pulled it
+back: Beavers dropped from 26% to 21% because a bought advantage is worth less when the board
+itself limits how much of your herd can occupy good water.
 
-**1. Swan resistance has quietly become a drawback.** Swans get the most animals across
-(3.67) and still win least (15%). They are carried by the current 6.4 times a game against
-everyone else's 17. Taking 1 off every current cancels most strength-1 tiles outright, and a
-quarter of those would have been pushing them *forward*. Resisting the river now means
-turning down free rides. It is a real consequence of the direction change and may want
-rebalancing, perhaps as resistance that only applies to currents that cost them ground.
+**Two things still worth a look.**
 
-**2. There is more income than there is to spend it on.** A faction earns about 35 resources
-across ten rounds and spends 18 to 31 of it. Beavers finish with nearly half unspent. Costs
-that were tight at 13.5 resources a game are loose at 35, which is why Power Cards went from
-never to routine. Either the deck should pay less, or the costs should rise, or a second
-action a turn would give players something to do with it.
+**1. Swan resistance has become a drawback.** Swans are carried by the current 6.6 times a
+game against everyone else's 15 to 17, and they win least at 16%. Taking 1 off every current
+cancels most strength-1 tiles outright, and a quarter of those would have been pushing them
+*forward*. Resisting the river now means turning down free rides. It may want rebalancing as
+resistance that only applies to currents which cost them ground.
 
-**3. Beavers still lead**, at 26% against 15 to 20. Their discount is worth more now that
-there is more to buy, and they build 9 things a game against everyone else's 6.5 to 7.5.
+**2. There is still more income than there is to spend it on.** A faction earns about 37
+resources across ten rounds and spends 18 to 34 of it. Beavers finish with half unspent. The
+blanks added in v0.04 did not reduce income, because the glut cards that earn a blank pay 4.
+Either the costs should rise, or a second action a turn would give players something to do
+with it.
 
-One smaller note, unchanged from v0.02: with no sharing penalty, where other players put their
-collectors never matters, so collector placement is still a private sum rather than a decision
-about anybody else. Setting `production.sharingPenalty` to 1 makes the Market contested - and
-it matters more now that there are two collectors each.
+One smaller note, unchanged: with no sharing penalty, where other players put their collectors
+never matters, so collector placement is still a private sum rather than a decision about
+anybody else. Setting `production.sharingPenalty` to 1 makes the Market contested, and it
+matters more now that there are two collectors each and half the deck has a blank.

@@ -318,6 +318,22 @@ h4 {
   border-color: transparent;
 }
 
+/* The picture sits in its own layer so that a tile whose current runs left, forward or back
+   can be turned until its printed arrows point the way the water actually goes, while the
+   strength badge, the animals and the coordinate stay upright on top of it. The tile is
+   square, so a quarter turn lands exactly back inside its own edges. */
+.tile-art {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+}
+
+.tile-art.face-left { transform: rotate(180deg); }
+.tile-art.face-forward { transform: rotate(90deg); }
+.tile-art.face-back { transform: rotate(-90deg); }
+
 .tile.bank {
   background-color: var(--bank-grass);
   background-image: linear-gradient(170deg, var(--bank-grass), var(--bank-grass-dark));
@@ -737,6 +753,19 @@ h4 {
 .prod-yield .who {
   font-size: 11px;
   color: var(--muted);
+}
+
+/* An area the card pays nothing for. Dimmed, outlined in a dashed border and struck through,
+   so a glut card's one blank reads as "nothing this round" at a glance rather than as just
+   another small number. */
+.prod-yield.blank {
+  opacity: 0.5;
+  border-style: dashed;
+}
+
+.prod-yield.blank .amount {
+  color: var(--bad);
+  text-decoration: line-through;
 }
 
 .prod-note {

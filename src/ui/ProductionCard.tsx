@@ -27,15 +27,22 @@ export function ProductionCard({ state }: { state: GameState }) {
         <div className="prod-card">
           <div className="prod-name">{card.name}</div>
           <div className="prod-yields">
-            {COLLECTOR_AREAS.map((area) => (
-              <div key={area} className={`prod-yield ${area}`}>
-                <span className="swatch" style={bg(resourceArt(area))} />
-                <span className="amount">{card.yields[area]}</span>
-                <span className="who">{RESOURCE_LABELS[area]}</span>
-              </div>
-            ))}
+            {COLLECTOR_AREAS.map((area) => {
+              const amount = card.yields[area]
+              return (
+                <div key={area} className={`prod-yield ${area}${amount === 0 ? ' blank' : ''}`}>
+                  <span className="swatch" style={bg(resourceArt(area))} />
+                  <span className="amount">{amount}</span>
+                  <span className="who">{RESOURCE_LABELS[area]}</span>
+                </div>
+              )
+            })}
           </div>
-          <div className="faint prod-note">Paid to every collector standing in that area.</div>
+          <div className="faint prod-note">
+            Paid to every collector standing in that area.
+            {COLLECTOR_AREAS.some((area) => card.yields[area] === 0) &&
+              ' A collector on the blank area brings back nothing this round.'}
+          </div>
         </div>
       </div>
     </div>

@@ -6,9 +6,39 @@
 // current reveals and finishing consistent no matter what caused the move.
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-import { bottomBankRow, inBounds, stepOffsets, tileAt, TOP_BANK_ROW } from './board'
+import { bottomBankRow, inBounds, isRiverRow, stepOffsets, tileAt, TOP_BANK_ROW } from './board'
 import { addLog } from './log'
 import type { Animal, GameState, Player, Tile } from './types'
+
+/**
+ * MAX_ANIMALS_NOTE
+ *
+ * A river square holds `board.maxAnimalsPerTile` animals. The limit binds anything a player
+ * chooses to do - walking, a raft, a rope, a card, dragging someone in with a Distraction -
+ * and does not bind the river. The current moves every animal standing on a tile, however
+ * many that is, so a stack shoved into the bank piles up past the limit rather than some of
+ * it being left behind. Making the river obey the cap would mean picking which animals get
+ * carried and which do not, and nothing in the game says who would choose.
+ *
+ * The banks are exempt. Every animal in the game starts stacked on the top bank, so a limit
+ * there would make the opening position illegal.
+ */
+export function animalsOnTile(state: GameState, col: number, row: number): number {
+  let count = 0
+  for (const animal of state.animals) {
+    if (animal.status === 'finished') continue
+    if (animal.col === col && animal.row === row) count += 1
+  }
+  return count
+}
+
+/** True when a deliberate move may not put another animal on this square. */
+export function tileIsFull(state: GameState, col: number, row: number): boolean {
+  const max = state.rules.board.maxAnimalsPerTile
+  if (max <= 0) return false
+  if (!isRiverRow(state.board, row)) return false
+  return animalsOnTile(state, col, row) >= max
+}
 
 export interface MoveOutcome {
   finished: boolean
@@ -104,6 +134,13 @@ export function canStepTo(
     }
     return { ok: false, error: 'Animals move one square at a time to an adjacent square.' }
   }
+  if (tileIsFull(state, col, row)) {
+    return {
+      ok: false,
+      error: `That square is full: only ${state.rules.board.maxAnimalsPerTile} animals fit ` +
+        `on a river square.`,
+    }
+  }
   return { ok: true }
 }
 
@@ -166,10 +203,20 @@ export function moveAnimalStep(
   return { ok: true }
 }
 
+export interface SlideOptions {
+  /**
+   * Lets the slide finish on a square that is already full. Set for the river's own effects
+   * - the current, a whirlpool, water released by a broken dam - which carry whatever is
+   * standing there rather than choosing. See MAX_ANIMALS_NOTE above.
+   */
+  ignoreCapacity?: boolean
+}
+
 /**
  * Moves an animal a number of squares in a straight line without charging movement points.
  * Used by the current, whirlpools, rafts, ropes and cards. Stops at the board edge or, in
- * wrap-around mode, carries on round the other side.
+ * wrap-around mode, carries on round the other side, and stops short of a full square unless
+ * the caller says otherwise.
  */
 export function slideAnimal(
   state: GameState,
@@ -177,6 +224,7 @@ export function slideAnimal(
   dc: number,
   dr: number,
   distance: number,
+  options: SlideOptions = {},
 ): { moved: number; finished: boolean } {
   const finishRow = bottomBankRow(state.board)
   let moved = 0
@@ -192,6 +240,7 @@ export function slideAnimal(
       }
     }
     if (nextRow < TOP_BANK_ROW || nextRow > finishRow) break
+    if (!options.ignoreCapacity && tileIsFull(state, nextCol, nextRow)) break
 
     placeAnimal(state, animal, nextCol, nextRow)
     moved += 1

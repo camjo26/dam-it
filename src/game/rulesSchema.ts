@@ -121,6 +121,17 @@ export const RULE_SECTIONS: RuleSection[] = [
           'current above zero are ever hidden: still water has nothing to hide.',
       },
       {
+        path: 'board.maxAnimalsPerTile',
+        label: 'Animals that fit on one river square',
+        type: 'number',
+        status: 'established',
+        min: 1,
+        max: 12,
+        note: 'Binds anything a player chooses to do. It does not bind the river: the ' +
+          'current carries every animal on a tile, so a stack driven into the bank piles ' +
+          'up past the limit. Banks are exempt, since every animal starts stacked on one.',
+      },
+      {
         path: 'board.sidewaysOnlyFromStrength',
         label: 'Sideways only from strength',
         type: 'number',
@@ -404,8 +415,9 @@ export const RULE_SECTIONS: RuleSection[] = [
   {
     id: 'production',
     title: 'Collectors and production',
-    blurb: 'Every card pays every area at least one, so no collector is ever wasted. The ' +
-      'exact distribution is still provisional.',
+    blurb: 'Half the deck pays nothing in one area, and a card may only do that if it pays ' +
+      '4 somewhere else: a blank is the price of a glut. The other half pay something ' +
+      'everywhere. The exact distribution is still provisional.',
     fields: [
       {
         path: 'production.collectorsPerPlayer',
@@ -681,6 +693,15 @@ export const OPEN_QUESTIONS: OpenQuestion[] = [
     current: 'Half sideways, a quarter forward, a quarter back. A current of 4 is always ' +
       'sideways, because forward at that strength is most of a free crossing. All of it is ' +
       'editable on the Board tab.',
+  },
+  {
+    id: 'stack-limit',
+    question:
+      'Four animals fit on a river square, and the limit binds players but not the river: ' +
+      'the current carries a whole stack, so animals shoved into the bank pile up past four. ' +
+      'Should the river obey the limit too, and if so who decides which animals get left?',
+    current: 'Four, and the river ignores it. Banks are exempt, since every animal starts ' +
+      'stacked on the top bank.',
   },
   {
     id: 'visible-currents',

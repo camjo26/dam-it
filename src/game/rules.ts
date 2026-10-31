@@ -97,6 +97,11 @@ export interface GameRules {
     visibleCurrents: number
     /** Strength at or above which a current may only run sideways, never up or down the river. */
     sidewaysOnlyFromStrength: number
+    /**
+     * Animals that fit on one river square. Banks are exempt, since every animal starts
+     * stacked on the top bank. The current ignores it: see MAX_ANIMALS_NOTE in movement.ts.
+     */
+    maxAnimalsPerTile: number
   }
   movement: {
     allowDiagonal: boolean
@@ -222,28 +227,42 @@ const DEFAULT_WIDTH = 10
 const DEFAULT_DEPTH = 7
 const DEFAULT_VISIBLE_CURRENTS = 5
 const SIDEWAYS_ONLY_FROM = 4
+const MAX_ANIMALS_PER_TILE = 4
 
 function bag(wood = 0, stone = 0, clay = 0, reeds = 0): ResourceBag {
   return { wood, stone, clay, reeds }
 }
 
-// Every card pays every area at least one, so a collector is never wasted. The name is the
-// shape of the card: whatever it is generous with is what the season is called.
+/**
+ * The production deck. Fourteen cards, two copies of each, named for whatever they are
+ * generous with.
+ *
+ * Exactly half of them pay nothing at all in one area, and a card is only allowed to do that
+ * if it pays PRODUCTION_FEAST somewhere else: a blank is the price of a glut, never just a
+ * mean card. The other half pay something everywhere. So a collector left on stone is a real
+ * gamble on a feast card and merely a thin round on a steady one, and stacking both
+ * collectors on one area is a bet with a visible downside.
+ */
+export const PRODUCTION_FEAST = 4
+
 export const DEFAULT_PRODUCTION_CARDS: ProductionCardDef[] = [
-  { id: 'forests-are-full', name: 'Forests Are Full', yields: bag(3, 1, 1, 1), copies: 2 },
-  { id: 'the-quarry-rings', name: 'The Quarry Rings', yields: bag(1, 3, 1, 1), copies: 2 },
-  { id: 'banks-run-thick', name: 'Banks Run Thick', yields: bag(1, 1, 3, 1), copies: 2 },
-  { id: 'reeds-in-flower', name: 'Reeds in Flower', yields: bag(1, 1, 1, 3), copies: 2 },
+  // Seven with a blank, each paying 4 somewhere to earn it.
+  { id: 'forests-are-full', name: 'Forests Are Full', yields: bag(4, 1, 0, 2), copies: 2 },
+  { id: 'the-quarry-rings', name: 'The Quarry Rings', yields: bag(0, 4, 2, 1), copies: 2 },
+  { id: 'banks-run-thick', name: 'Banks Run Thick', yields: bag(1, 0, 4, 2), copies: 2 },
+  { id: 'reeds-in-flower', name: 'Reeds in Flower', yields: bag(2, 1, 0, 4), copies: 2 },
+  { id: 'rockfall', name: 'Rockfall', yields: bag(1, 4, 2, 0), copies: 2 },
+  { id: 'the-flood-plain', name: 'The Flood Plain', yields: bag(4, 0, 2, 1), copies: 2 },
+  { id: 'timber-and-stone', name: 'Timber and Stone', yields: bag(4, 3, 0, 1), copies: 2 },
+
+  // Seven that pay something everywhere.
   { id: 'spring-flood', name: 'Spring Flood', yields: bag(2, 1, 2, 3), copies: 2 },
   { id: 'after-the-storm', name: 'After the Storm', yields: bag(3, 2, 1, 2), copies: 2 },
   { id: 'low-water', name: 'Low Water', yields: bag(1, 2, 3, 1), copies: 2 },
   { id: 'a-good-season', name: 'A Good Season', yields: bag(2, 2, 2, 2), copies: 2 },
   { id: 'lean-weeks', name: 'Lean Weeks', yields: bag(1, 1, 1, 1), copies: 2 },
-  { id: 'timber-and-stone', name: 'Timber and Stone', yields: bag(3, 3, 1, 1), copies: 1 },
   { id: 'the-rich-delta', name: 'The Rich Delta', yields: bag(2, 1, 3, 2), copies: 2 },
   { id: 'cold-snap', name: 'Cold Snap', yields: bag(1, 2, 1, 2), copies: 2 },
-  { id: 'the-flood-plain', name: 'The Flood Plain', yields: bag(4, 1, 2, 1), copies: 1 },
-  { id: 'rockfall', name: 'Rockfall', yields: bag(1, 4, 1, 2), copies: 1 },
 ]
 
 // The twelve printed Power Cards. Three copies of each except River Shift and Whirlpool,
@@ -450,6 +469,7 @@ export const DEFAULT_RULES: GameRules = {
     currentDirectionWeights: DIRECTION_WEIGHTS,
     visibleCurrents: DEFAULT_VISIBLE_CURRENTS,
     sidewaysOnlyFromStrength: SIDEWAYS_ONLY_FROM,
+    maxAnimalsPerTile: MAX_ANIMALS_PER_TILE,
   },
   movement: {
     allowDiagonal: false,

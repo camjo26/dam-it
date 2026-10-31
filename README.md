@@ -43,8 +43,9 @@ pnpm build
    **Normal - Old Mottle** and press **Start a 10 round game**.
 2. **Phase A.** Put your **two** collectors in resource areas - split them, or stack both on
    one area to double up on a hunch. A production card is then turned over and pays every
-   collector according to where it stands. Every card pays every area at least 1, so a
-   collector is never wasted. You choose before you see the card.
+   collector according to where it stands. **Half the deck pays nothing at all in one area**,
+   and a card may only do that if it pays 4 somewhere else, so a blank is the price of a
+   glut. You choose before you see the card.
 3. **Phase B.** Click one of your animals, then click a highlighted square to move it. You have
    3 movement points to split between your animals however you like, plus one action: build
    something, buy a Power Card, destroy a dam, play your Distraction token, or play a card.
@@ -62,9 +63,17 @@ on the tile as a number and an arrow. Roughly half push sideways, a quarter push
 toward the far bank and a quarter push **back** toward where you started, so the river can
 hand you a crossing or take one away. A current of 4 only ever runs sideways.
 
+Each tile is turned so its printed arrows point the way its water actually runs, so the board
+can be read at a glance without checking the badge on every square.
+
 Only **5** currents start face up. Every other tile shows a **?** until one of your animals
 stands on it, and then it stays turned over for everybody - so finding out costs you the
 animal that found out.
+
+**Four animals fit on a river square.** That stops you moving, roping, rafting or dragging a
+fifth onto one. It does *not* stop the river: the current carries every animal standing on a
+tile, so a stack driven into the bank piles up past four rather than some of it being left
+behind.
 
 ### Distraction tokens
 
@@ -143,19 +152,21 @@ pnpm sim -- --games 150 --seed test --set board.riverDepth=5
 
 ## What the simulator says so far
 
-300 games at Normal, v0.03 rules, in `docs/balance/v0.03.csv`:
+300 games at Normal, v0.04 rules, none failed, in `docs/balance/v0.04.csv`:
 
 | Faction | Win % | Score | Animals across | Mission % | Built | Carried by the current |
 |---|---|---|---|---|---|---|
-| Ducks | 20 | 5.07 | 3.53 | 35 | 7.5 | 17.3 |
-| Swans | 15 | 4.87 | 3.67 | 28 | 7.4 | 6.4 |
-| Frogs | 20 | 4.83 | 2.99 | 43 | 6.5 | 16.3 |
-| Beavers | 26 | 5.36 | 3.53 | 41 | 9.0 | 17.5 |
+| Ducks | 24 | 5.28 | 3.66 | 37 | 7.2 | 17.2 |
+| Swans | 16 | 4.95 | 3.56 | 32 | 7.1 | 6.6 |
+| Frogs | 19 | 5.32 | 3.32 | 46 | 6.8 | 14.8 |
+| Beavers | 21 | 5.09 | 3.51 | 35 | 8.9 | 16.3 |
 
-Crossings are up from about 2.5 to about 3.4 now that a quarter of the river pushes forward,
-and Power Cards actually get bought. The standout new finding is that **Swan resistance has
-become a drawback**: they get the most animals across and win least, because taking 1 off
-every current also means turning down the forward ones. Three findings worth a look are in
+Crossings are up from about 2.5 in v0.02 to about 3.5, now that a quarter of the river pushes
+forward, and Power Cards actually get bought. The four-to-a-square limit also pulled the
+factions back together: the spread was 15 to 26 in v0.03 and is 16 to 24 now, with Beavers no
+longer running away with it. The standout finding is that **Swan resistance has become a
+drawback**: they get plenty of animals across and still win least, because taking 1 off every
+current also means turning down the forward ones. Findings worth a look are in
 [docs/rules.md](docs/rules.md#what-the-numbers-say).
 
 ## How it is put together

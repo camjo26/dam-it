@@ -1,4 +1,4 @@
-export const VERSION = '0.03'
+export const VERSION = '0.04'
 
 export interface ChangelogEntry {
   version: string
@@ -8,6 +8,18 @@ export interface ChangelogEntry {
 
 // Newest first.
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.04',
+    date: '2026-10-31',
+    notes: [
+      'Half the production deck now pays nothing at all in one area, and a card may only do '
+        + 'that if it pays 4 somewhere else. A blank is the price of a glut.',
+      'River tiles are turned so their printed arrows point the way the water actually runs, '
+        + 'instead of always pointing right.',
+      'Four animals to a river square. It stops you moving, roping, rafting or dragging a '
+        + 'fifth onto one; it does not stop the river, which carries a whole stack.',
+    ],
+  },
   {
     version: '0.03',
     date: '2026-10-30',

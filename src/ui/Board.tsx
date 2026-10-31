@@ -25,6 +25,18 @@ const DIRECTION_ARROWS: Record<CurrentDirection, string> = {
   back: '↑',
 }
 
+/**
+ * The printed current tiles all draw their arrows pointing right, so a tile whose current
+ * runs any other way is turned until the arrows point the way the water actually goes. Only
+ * the picture turns: the badge, the animals and the coordinate stay upright.
+ */
+const DIRECTION_SPIN: Record<CurrentDirection, string> = {
+  right: '',
+  left: ' face-left',
+  forward: ' face-forward',
+  back: ' face-back',
+}
+
 export interface BoardProps {
   state: GameState
   selectedAnimalId: string | null
@@ -146,6 +158,7 @@ export function Board({
 
             const key = `${col},${row}`
             const animals = byTile.get(key) ?? []
+            const revealed = isRevealed(tile, revealAllCurrents)
             const label = currentLabel(tile, revealAllCurrents)
             const classes = ['tile', 'art']
 
@@ -157,8 +170,13 @@ export function Board({
               classes.push('bank', 'bank-bottom')
               art = bankSlice(BANK_BOTTOM_ART, col, board.width)
             } else {
-              art = bg(tileArt(tile, isRevealed(tile, revealAllCurrents)) as string)
+              art = bg(tileArt(tile, revealed) as string)
             }
+
+            // Only a face-up river tile with a current has arrows drawn on it to turn.
+            const spin = tile.kind === 'river' && revealed && tile.current > 0
+              ? DIRECTION_SPIN[tile.direction]
+              : ''
 
             if (tile.kind === 'island') {
               classes.push('island')
@@ -193,12 +211,12 @@ export function Board({
               <div
                 key={tile.id}
                 className={classes.join(' ')}
-                style={art}
                 title={title}
                 onClick={() => onTileClick(tile)}
                 role="button"
                 tabIndex={-1}
               >
+                <span className={`tile-art${spin}`} style={art} />
                 {label.text && (
                   <span className={`current${label.hidden ? ' hidden-current' : ''}`}>
                     {label.text}

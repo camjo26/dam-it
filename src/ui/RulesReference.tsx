@@ -102,9 +102,10 @@ function HowToPlay({ rules }: { rules: GameRules }) {
           <b>Phase A, Resources.</b> Everyone places{' '}
           {rules.production.collectorsPerPlayer} collectors in the four resource areas, split
           across two or stacked on one. A production card is then turned over and says what
-          one collector in each area brings back. Every card pays every area at least 1, so
-          stacking both on clay is a bet on how much clay, not on whether there is any. You
-          choose before you see the card.
+          one collector in each area brings back. <b>Half the deck pays nothing at all in one
+          area</b>, and a card is only allowed to do that if it pays 4 somewhere else - so a
+          blank is the price of a glut, and stacking both collectors on clay can leave you
+          with nothing. You choose before you see the card.
         </li>
         <li>
           <b>Phase B, Player turns.</b> Each player takes one turn, in faction order. A turn is
@@ -147,6 +148,12 @@ function HowToPlay({ rules }: { rules: GameRules }) {
           Only <b>{rules.board.visibleCurrents}</b> currents start face up. Every other tile
           is face down and shows a <b>?</b> until one of your animals stands on it, and then
           it stays turned over for everybody. Finding out costs you the animal that found out.
+        </li>
+        <li>
+          A river square holds <b>{rules.board.maxAnimalsPerTile} animals</b>. That stops you
+          moving onto a full square, and it stops a rope, a raft, a card or a Distraction
+          putting one there. It does <b>not</b> stop the river: the current carries every
+          animal standing on a tile, so a stack driven into the bank piles up past four.
         </li>
         <li>
           <b>Whirlpools</b> roll for left, right or forward, and affect each animal at most{' '}

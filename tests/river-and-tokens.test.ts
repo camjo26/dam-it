@@ -6,6 +6,9 @@
 import { describe, expect, it } from 'vitest'
 
 import { assessCurrent } from '../src/game/current'
+import { applyAction } from '../src/game/engine'
+import { legalDestinations } from '../src/game/movement'
+import { PRODUCTION_FEAST } from '../src/game/rules'
 import {
   animalsOf,
   expectRejected,
@@ -145,13 +148,134 @@ describe('two collectors', () => {
     expect(playerOf(state, 'ducks').collectors).toEqual(['stone'])
   })
 
-  it('pays every area at least one on every card in the deck', () => {
+  it('blanks one area on exactly half the deck, and never without a glut', () => {
     const state = makeGame()
-    for (const card of state.rules.production.cards) {
+    const cards = state.rules.production.cards
+    const copiesOf = (c: typeof cards[number]) => c.copies
+
+    const withBlank = cards.filter((c) => Object.values(c.yields).some((n) => n === 0))
+    const total = cards.reduce((sum, c) => sum + copiesOf(c), 0)
+    const blanked = withBlank.reduce((sum, c) => sum + copiesOf(c), 0)
+    expect(blanked * 2).toBe(total)
+
+    for (const card of withBlank) {
+      const amounts = Object.values(card.yields)
+      // Exactly one blank, and a 4 somewhere to have earned it.
+      expect(amounts.filter((n) => n === 0)).toHaveLength(1)
+      expect(Math.max(...amounts)).toBeGreaterThanOrEqual(PRODUCTION_FEAST)
+    }
+
+    // And nothing anywhere is negative, however the deck is edited.
+    for (const card of cards) {
       for (const amount of Object.values(card.yields)) {
-        expect(amount).toBeGreaterThanOrEqual(1)
+        expect(amount).toBeGreaterThanOrEqual(0)
       }
     }
+  })
+
+  it('pays nothing for a collector standing on a blank area', () => {
+    let state = makeGame({ tweak: (rules) => {
+      // One card, one copy, so the draw is certain: stone pays nothing on it.
+      rules.production.cards = [
+        { id: 'only', name: 'Test Card', yields: { wood: 4, stone: 0, clay: 2, reeds: 1 },
+          copies: 1 },
+      ]
+    } })
+    for (const id of state.players.map((p) => p.id)) {
+      while (state.players.find((p) => p.id === id)!.collectors.length < 2) {
+        state = must(state, { type: 'place-collector', playerId: id, area: 'stone' })
+      }
+    }
+    state = must(state, { type: 'resolve-production' })
+    expect(playerOf(state, 'ducks').resources.stone).toBe(0)
+  })
+})
+
+describe('four to a square', () => {
+  it('refuses a step onto a square that already holds four', () => {
+    let state = startPlayerTurns(makeGame())
+    const ducks = animalsOf(state, 'ducks')
+    // Fill D2 with four animals, then try to walk a fifth in from the square above.
+    for (let i = 0; i < 4; i += 1) {
+      put(state, state.animals.find((a) => a.id === ducks[i].id)!, 3, 2)
+    }
+    const fifth = ducks[4]
+    put(state, state.animals.find((a) => a.id === fifth.id)!, 3, 1)
+
+    expectRejected(state, { type: 'move-animal', animalId: fifth.id, col: 3, row: 2 })
+    // And the square is not offered as a destination either.
+    const legal = legalDestinations(state, state.animals.find((a) => a.id === fifth.id)!)
+    expect(legal.some((l) => l.col === 3 && l.row === 2)).toBe(false)
+  })
+
+  it('does not limit the banks, where every animal starts stacked', () => {
+    const state = makeGame()
+    const topBank = state.animals.filter((a) => a.row === 0)
+    expect(topBank.length).toBe(state.animals.length)
+    const ducks = animalsOf(state, 'ducks')[0]
+    // Walking back onto a crowded bank square stays legal.
+    put(state, state.animals.find((a) => a.id === ducks.id)!, ducks.col, 1)
+    const started = startPlayerTurns(state)
+    const moved = applyAction(started, {
+      type: 'move-animal', animalId: ducks.id, col: ducks.col, row: 0,
+    })
+    expect(moved.ok).toBe(true)
+  })
+
+  it('lets the current carry a whole stack past the limit', () => {
+    // Every tile pushes left at strength 2, so a stack on the left edge is driven into it.
+    let state = makeGame({ currentStrength: 2, directionWeights: [1, 0, 0, 0] })
+    state = startPlayerTurns(state)
+    const ducks = animalsOf(state, 'ducks')
+    for (let i = 0; i < 4; i += 1) {
+      put(state, state.animals.find((a) => a.id === ducks[i].id)!, 1, 3)
+    }
+    const swans = animalsOf(state, 'swans')
+    for (let i = 0; i < 2; i += 1) {
+      put(state, state.animals.find((a) => a.id === swans[i].id)!, 0, 3)
+    }
+
+    state = must(reachCurrentPhase(state), { type: 'resolve-current' })
+
+    // All four ducks came over, and none was left behind because the edge was full.
+    const onEdge = state.animals.filter((a) => a.col === 0 && a.row === 3)
+    expect(onEdge.filter((a) => a.factionId === 'ducks')).toHaveLength(4)
+    expect(onEdge.length).toBeGreaterThan(state.rules.board.maxAnimalsPerTile)
+  })
+
+  it('stops a rope short of a full square rather than stacking a fifth on it', () => {
+    let state = startPlayerTurns(makeGame())
+    playerOf(state, 'ducks').equipment.rope = 1
+    const mine = animalsOf(state, 'ducks')
+    // Four animals already on C3, and the rope is pulling a fifth toward them from E3.
+    for (let i = 0; i < 4; i += 1) {
+      put(state, state.animals.find((a) => a.id === mine[i].id)!, 2, 3)
+    }
+    put(state, state.animals.find((a) => a.id === mine[4].id)!, 4, 3)
+
+    state = must(state, {
+      type: 'use-rope', animalId: mine[4].id, towardAnimalId: mine[0].id,
+    })
+    // It closed the gap as far as it could and stopped on D3, next to the full square.
+    const pulled = state.animals.find((a) => a.id === mine[4].id)!
+    expect(pulled.col).toBe(3)
+    expect(pulled.row).toBe(3)
+  })
+
+  it('refuses a rope with nowhere left to go, rather than overfilling the square', () => {
+    const state = startPlayerTurns(makeGame())
+    playerOf(state, 'ducks').equipment.rope = 1
+    const mine = animalsOf(state, 'ducks')
+    for (let i = 0; i < 4; i += 1) {
+      put(state, state.animals.find((a) => a.id === mine[i].id)!, 2, 3)
+    }
+    // Already next to the full square, so the only square the rope could reach is full.
+    put(state, state.animals.find((a) => a.id === mine[4].id)!, 3, 3)
+
+    const error = expectRejected(state, {
+      type: 'use-rope', animalId: mine[4].id, towardAnimalId: mine[0].id,
+    })
+    expect(error).toMatch(/full/)
   })
 })
 

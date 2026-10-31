@@ -11,7 +11,14 @@ import { bottomBankRow, tileAt } from './board'
 import { applyCardEffect, cardById, cardPlayableNow, type CardTarget } from './cards'
 import { clearRoundEffects, resolveCurrentPhase } from './current'
 import { addLog } from './log'
-import { coord, isFinished, moveAnimalStep, placeAnimal, slideAnimal } from './movement'
+import {
+  coord,
+  isFinished,
+  moveAnimalStep,
+  placeAnimal,
+  slideAnimal,
+  tileIsFull,
+} from './movement'
 import { refreshMissionProgress } from './missions'
 import {
   allCollectorsPlaced,
@@ -369,7 +376,8 @@ function handleDestroyDam(state: GameState, damId: string): ActionResult {
   )
   for (const animal of swept) {
     const before = coord(animal.col, animal.row)
-    const result = slideAnimal(state, animal, dc, dr, sweep)
+    // Released water, not a choice, so it carries everything regardless of the square limit.
+    const result = slideAnimal(state, animal, dc, dr, sweep, { ignoreCapacity: true })
     addLog(state, {
       kind: 'dam-sweep',
       playerId: animal.playerId,
@@ -397,7 +405,12 @@ function handleUseRaft(state: GameState, animalId: string): ActionResult {
   const before = coord(animal.col, animal.row)
   const result = slideAnimal(state, animal, 0, 1, state.rules.equipmentEffects.raftDistance)
   if (result.moved === 0) {
-    return fail('That animal has nowhere to go forward.')
+    const ahead = tileAt(state.board, animal.col, animal.row + 1)
+    return fail(
+      ahead && tileIsFull(state, ahead.col, ahead.row)
+        ? `The square ahead already holds ${state.rules.board.maxAnimalsPerTile} animals.`
+        : 'That animal has nowhere to go forward.',
+    )
   }
   player.equipment.raft -= 1
 
@@ -467,7 +480,10 @@ function handleUseRope(
     if (isFinished(animal)) break
   }
 
-  if (moved === 0) return fail('The rope could not move that animal any closer.')
+  if (moved === 0) {
+    return fail('The rope could not move that animal any closer: the way is blocked or the ' +
+      'next square is full.')
+  }
   player.equipment.rope -= 1
 
   addLog(state, {
