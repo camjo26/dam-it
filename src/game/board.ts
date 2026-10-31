@@ -184,6 +184,24 @@ export function visibleCurrent(tile: Tile): number | null {
   return tile.current
 }
 
+/**
+ * The four squares a step away along the rows and columns. Ranges in this game are counted
+ * the way the animals move, so "next to" never means diagonally.
+ */
+export function orthogonalNeighbours(
+  board: Board,
+  col: number,
+  row: number,
+): Array<[number, number]> {
+  const out: Array<[number, number]> = []
+  for (const offset of ORTHOGONAL_OFFSETS) {
+    const nc = col + offset.dc
+    const nr = row + offset.dr
+    if (inBounds(board, nc, nr)) out.push([nc, nr])
+  }
+  return out
+}
+
 export function adjacentCoords(board: Board, col: number, row: number): Array<[number, number]> {
   const out: Array<[number, number]> = []
   for (const offset of [...ORTHOGONAL_OFFSETS, ...DIAGONAL_OFFSETS]) {

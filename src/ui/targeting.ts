@@ -10,6 +10,7 @@ import { CARD_REQUIREMENTS, type CardTarget } from '../game/cards'
 
 export type PickKind =
   | 'own-animal'
+  | 'second-own-animal'
   | 'enemy-animal'
   | 'any-animal'
   | 'tile'
@@ -17,10 +18,12 @@ export type PickKind =
   | 'adjacent-island'
   | 'direction-sideways'
   | 'direction-forward-back'
+  | 'direction-any'
   | 'two-resources'
 
 export const PICK_PROMPTS: Record<PickKind, string> = {
   'own-animal': 'Click one of your own animals on the board.',
+  'second-own-animal': 'Now click the animal of yours it should join.',
   'enemy-animal': "Click another player's animal on the board.",
   'any-animal': 'Click any animal on the board.',
   tile: 'Click a tile on the board.',
@@ -28,6 +31,7 @@ export const PICK_PROMPTS: Record<PickKind, string> = {
   'adjacent-island': 'Click an island next to that animal.',
   'direction-sideways': 'Choose a direction: left or right.',
   'direction-forward-back': 'Choose a direction: forward or backward.',
+  'direction-any': 'Choose which way it breaks.',
   'two-resources': 'Choose two different resources.',
 }
 
@@ -41,12 +45,14 @@ export function cardPicks(cardId: string): PickKind[] {
   else if (requirement.enemyAnimal) picks.push('enemy-animal')
   else if (cardId === 'whirlpool') picks.push('any-animal')
 
+  if (requirement.secondOwnAnimal) picks.push('second-own-animal')
   if (requirement.adjacentIsland) picks.push('adjacent-island')
   else if (requirement.tile) picks.push('tile')
 
   if (requirement.secondTile) picks.push('second-tile')
   if (requirement.direction === 'sideways') picks.push('direction-sideways')
   if (requirement.direction === 'forward-back') picks.push('direction-forward-back')
+  if (requirement.direction === 'any') picks.push('direction-any')
   if (requirement.resourceChoices) picks.push('two-resources')
 
   return picks

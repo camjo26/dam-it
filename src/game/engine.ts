@@ -14,6 +14,7 @@ import { addLog } from './log'
 import {
   coord,
   isFinished,
+  isInPlay,
   moveAnimalStep,
   placeAnimal,
   slideAnimal,
@@ -31,6 +32,7 @@ import { dealRoles, saboteurUsesLeft } from './roles'
 import { rollDie } from './rng'
 import type { GameRules } from './rules'
 import { scoreGame } from './scoring'
+import { bagTotal, describeTerms, judgeTrade, settleTrade } from './trade'
 import type {
   Animal,
   ActionResult,
@@ -41,6 +43,8 @@ import type {
   Player,
   ResourceBag,
   ResourceId,
+  TradeProposal,
+  TradeTerms,
 } from './types'
 import { CURRENT_VECTORS, RESOURCE_IDS, RESOURCE_LABELS } from './types'
 
@@ -63,6 +67,15 @@ export type GameAction =
   | { type: 'play-distraction'; col: number; row: number }
   | { type: 'resolve-distraction'; moves: Array<{ animalId: string; distance: number }> }
   | { type: 'remove-collector'; playerId: string; index: number }
+  | {
+      type: 'propose-trade'
+      toPlayerId: string
+      offer: TradeTerms
+      request: { resources: ResourceBag; cardCount: number }
+    }
+  | { type: 'answer-trade' }
+  | { type: 'settle-trade'; accept: boolean }
+  | { type: 'withdraw-trade' }
   | { type: 'end-turn' }
   | { type: 'resolve-current' }
   | { type: 'undo' }
@@ -246,6 +259,8 @@ function endRound(state: GameState): void {
   state.activePlayerIndex = 0
   state.saboteurUsesThisRound = {}
   state.pendingDistraction = null
+  state.pendingTrade = null
+  state.tradesProposedThisTurn = {}
   for (const player of state.players) player.powerCardsPlayedThisRound = 0
   resetCollectors(state)
 
@@ -337,8 +352,9 @@ function handlePlaceDam(state: GameState, col: number, row: number): ActionResul
     kind: 'dam-placed',
     playerId: player.id,
     message: `${player.name} placed a dam at ${coord(col, row)}.`,
-    detail: `It calms the water ${state.rules.dam.calmAxis === 'vertical' ? 'above and below' : 'left and right'} ` +
-      `it, within ${state.rules.dam.calmRadius} square, until it is destroyed.`,
+    detail: `It holds the water at 0 on its own square and ` +
+      `${state.rules.dam.calmAxis === 'vertical' ? 'above and below' : 'either side of'} it, ` +
+      `within ${state.rules.dam.calmRadius} square, until it is destroyed.`,
   })
   return { ok: true, state }
 }
@@ -372,12 +388,13 @@ function handleDestroyDam(state: GameState, damId: string): ActionResult {
   const damTile = tileAt(state.board, dam.col, dam.row)
   const { dc, dr } = CURRENT_VECTORS[damTile?.direction ?? state.rules.current.direction]
   const swept = state.animals.filter(
-    (a) => a.status !== 'finished' && a.col === dam.col + dc && a.row === dam.row + dr,
+    (a) => isInPlay(a) && a.col === dam.col + dc && a.row === dam.row + dr,
   )
   for (const animal of swept) {
     const before = coord(animal.col, animal.row)
     // Released water, not a choice, so it carries everything regardless of the square limit.
-    const result = slideAnimal(state, animal, dc, dr, sweep, { ignoreCapacity: true })
+    const result = slideAnimal(state, animal, dc, dr, sweep,
+      { ignoreCapacity: true, canSweepOff: true })
     addLog(state, {
       kind: 'dam-sweep',
       playerId: animal.playerId,
@@ -397,7 +414,7 @@ function handleUseRaft(state: GameState, animalId: string): ActionResult {
 
   const animal = state.animals.find((a) => a.id === animalId)
   if (!animal || animal.playerId !== player.id) return fail('Choose one of your animals.')
-  if (animal.status === 'finished') return fail('That animal has already crossed.')
+  if (!isInPlay(animal)) return fail('That animal is no longer in play.')
 
   const actionError = spendAction(player, state.rules.equipment.raft.useUsesAction)
   if (actionError) return fail(actionError)
@@ -446,14 +463,11 @@ function handleUseRope(
     return fail('Choose a second animal of yours to pull toward.')
   }
   if (animal.id === anchorAnimal.id) return fail('Choose two different animals.')
-  if (animal.status === 'finished' || anchorAnimal.status === 'finished') {
+  if (!isInPlay(animal) || !isInPlay(anchorAnimal)) {
     return fail('Both animals must still be in play.')
   }
 
-  const gap = Math.max(
-    Math.abs(animal.col - anchorAnimal.col),
-    Math.abs(animal.row - anchorAnimal.row),
-  )
+  const gap = orthogonalDistance(animal, anchorAnimal)
   const range = state.rules.equipmentEffects.ropeRange
   if (gap > range) return fail(`Those animals are more than ${range} squares apart.`)
 
@@ -507,7 +521,7 @@ function handleUseAnchor(state: GameState, animalId: string): ActionResult {
 
   const animal = state.animals.find((a) => a.id === animalId)
   if (!animal || animal.playerId !== player.id) return fail('Choose one of your animals.')
-  if (animal.status === 'finished') return fail('That animal has already crossed.')
+  if (!isInPlay(animal)) return fail('That animal is no longer in play.')
 
   const actionError = spendAction(player, state.rules.equipment.anchor.useUsesAction)
   if (actionError) return fail(actionError)
@@ -655,10 +669,17 @@ function handleSaboteurSurge(
 // Distraction tokens
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-/** Chebyshev distance, so the token's reach is a square around it rather than a diamond. */
-export function tileDistance(a: { col: number; row: number }, b: { col: number;
-  row: number }): number {
-  return Math.max(Math.abs(a.col - b.col), Math.abs(a.row - b.row))
+/**
+ * Distance counted the way the animals themselves move: along the rows and columns, never
+ * diagonally. Three squares means three steps left, right, forward or back, so a token's
+ * reach is a diamond rather than a square and a corner at (3, 3) is six away, not three.
+ * Everything in the game that talks about a range uses this.
+ */
+export function orthogonalDistance(
+  a: { col: number; row: number },
+  b: { col: number; row: number },
+): number {
+  return Math.abs(a.col - b.col) + Math.abs(a.row - b.row)
 }
 
 /** The roll this animal needs to shrug off a distraction. Ducks need more than everyone. */
@@ -691,7 +712,7 @@ function handlePlayDistraction(state: GameState, col: number, row: number): Acti
   // it only catches opponents is the skill in it.
   const radius = state.rules.distraction.radius
   const inRange = state.animals.filter(
-    (a) => a.status !== 'finished' && tileDistance(a, { col, row }) <= radius,
+    (a) => isInPlay(a) && orthogonalDistance(a, { col, row }) <= radius,
   )
 
   const rolls: DistractionRoll[] = []
@@ -750,7 +771,7 @@ function handleResolveDistraction(
     const entry = pending.rolls.find((r) => r.animalId === move.animalId)
     if (!entry || !entry.distracted) continue
     const animal = state.animals.find((a) => a.id === move.animalId)
-    if (!animal || animal.status === 'finished') continue
+    if (!animal || !isInPlay(animal)) continue
 
     const steps = Math.max(0, Math.min(move.distance, maxDistance))
     const before = coord(animal.col, animal.row)
@@ -787,6 +808,175 @@ function handleResolveDistraction(
 
   state.pendingDistraction = null
   refreshMissionProgress(state)
+  return { ok: true, state }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+// Trading
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+/** "the Swans' trade", not "the Swans's trade". Faction names are mostly plurals. */
+function possessive(name: string): string {
+  return name.endsWith('s') ? `${name}'` : `${name}'s`
+}
+
+function tradesLeft(state: GameState, player: Player): number {
+  const used = state.tradesProposedThisTurn[player.id] ?? 0
+  return Math.max(0, state.rules.trade.proposalsPerTurn - used)
+}
+
+function holdsTerms(player: Player, terms: TradeTerms): boolean {
+  if (!RESOURCE_IDS.every((id) => player.resources[id] >= Math.max(0, terms.resources[id]))) {
+    return false
+  }
+  return terms.cardInstanceIds.every((id) => player.hand.some((c) => c.instanceId === id))
+}
+
+function handleProposeTrade(
+  state: GameState,
+  toPlayerId: string,
+  offer: TradeTerms,
+  request: TradeProposal['request'],
+): ActionResult {
+  const player = requireTurn(state)
+  if (typeof player === 'string') return fail(player)
+  if (!state.rules.trade.enabled) return fail('Trading is switched off in the current rules.')
+  if (state.pendingTrade) return fail('There is already a trade on the table.')
+  if (tradesLeft(state, player) <= 0) {
+    return fail(`Only ${state.rules.trade.proposalsPerTurn} trade may be proposed a turn.`)
+  }
+
+  const other = state.players.find((p) => p.id === toPlayerId)
+  if (!other) return fail('Unknown player.')
+  if (other.id === player.id) return fail('You cannot trade with yourself.')
+  if (!holdsTerms(player, offer)) return fail('You do not hold everything you are offering.')
+
+  const offered = bagTotal(offer.resources) + offer.cardInstanceIds.length
+  const wanted = bagTotal(request.resources) + Math.max(0, request.cardCount)
+  if (offered === 0 && wanted === 0) return fail('A trade has to move something.')
+
+  const actionError = spendAction(player, state.rules.trade.usesAction)
+  if (actionError) return fail(actionError)
+
+  state.tradesProposedThisTurn[player.id] = (state.tradesProposedThisTurn[player.id] ?? 0) + 1
+  state.pendingTrade = {
+    id: `trade-${state.nextLogId}`,
+    fromPlayerId: player.id,
+    toPlayerId: other.id,
+    offer,
+    request,
+    status: 'awaiting-reply',
+  }
+
+  addLog(state, {
+    kind: 'trade-offer',
+    playerId: player.id,
+    message: `${player.name} offered ${other.name} a trade.`,
+    detail: `Offering ${describeTerms(offer)} for ` +
+      `${describeTerms({ resources: request.resources, cardInstanceIds: [] },
+        request.cardCount)}.`,
+  })
+  return { ok: true, state }
+}
+
+/** The other player's answer: take it, leave it, or name terms of their own. */
+function handleAnswerTrade(state: GameState): ActionResult {
+  const proposal = state.pendingTrade
+  if (!proposal) return fail('There is no trade waiting for an answer.')
+  if (proposal.status !== 'awaiting-reply') return fail('That trade has already been answered.')
+
+  const from = state.players.find((p) => p.id === proposal.fromPlayerId)
+  const to = state.players.find((p) => p.id === proposal.toPlayerId)
+  if (!from || !to) return fail('Unknown player.')
+
+  const verdict = judgeTrade(state, proposal)
+
+  if (verdict.answer === 'accept') {
+    settleTrade(from, to, proposal.offer, {
+      resources: proposal.request.resources,
+      cardInstanceIds: to.hand.slice(0, proposal.request.cardCount).map((c) => c.instanceId),
+    })
+    state.pendingTrade = null
+    addLog(state, {
+      kind: 'trade-accepted',
+      playerId: to.id,
+      message: `${to.name} accepted ${possessive(from.name)} trade.`,
+      detail: verdict.reply,
+    })
+    clearUndo(state)
+    return { ok: true, state }
+  }
+
+  if (verdict.answer === 'counter' && verdict.counter) {
+    proposal.status = 'countered'
+    proposal.counter = verdict.counter
+    proposal.reply = verdict.reply
+    addLog(state, {
+      kind: 'trade-counter',
+      playerId: to.id,
+      message: `${to.name} countered ${possessive(from.name)} offer.`,
+      detail: verdict.reply,
+    })
+    return { ok: true, state }
+  }
+
+  state.pendingTrade = null
+  addLog(state, {
+    kind: 'trade-declined',
+    playerId: to.id,
+    message: `${to.name} turned ${possessive(from.name)} trade down.`,
+    detail: verdict.reply,
+  })
+  return { ok: true, state }
+}
+
+/** The proposer's last word on a counter-offer. */
+function handleSettleTrade(state: GameState, accept: boolean): ActionResult {
+  const proposal = state.pendingTrade
+  if (!proposal) return fail('There is no trade to settle.')
+  if (proposal.status !== 'countered') return fail('There is no counter-offer to answer.')
+
+  const from = state.players.find((p) => p.id === proposal.fromPlayerId)
+  const to = state.players.find((p) => p.id === proposal.toPlayerId)
+  if (!from || !to || !proposal.counter) return fail('That trade is no longer valid.')
+
+  if (!accept) {
+    state.pendingTrade = null
+    addLog(state, {
+      kind: 'trade-declined',
+      playerId: from.id,
+      message: `${from.name} turned down ${possessive(to.name)} counter-offer.`,
+    })
+    return { ok: true, state }
+  }
+
+  // Both sides are re-checked here: a counter is answered after other things have happened.
+  if (!holdsTerms(from, proposal.offer) || !holdsTerms(to, proposal.counter)) {
+    state.pendingTrade = null
+    return fail('That trade can no longer be honoured, so it has been taken off the table.')
+  }
+
+  settleTrade(from, to, proposal.offer, proposal.counter)
+  state.pendingTrade = null
+  addLog(state, {
+    kind: 'trade-accepted',
+    playerId: from.id,
+    message: `${from.name} took ${possessive(to.name)} counter-offer.`,
+    detail: `${describeTerms(proposal.offer)} for ${describeTerms(proposal.counter)}.`,
+  })
+  clearUndo(state)
+  return { ok: true, state }
+}
+
+function handleWithdrawTrade(state: GameState): ActionResult {
+  if (!state.pendingTrade) return fail('There is no trade to withdraw.')
+  const from = state.players.find((p) => p.id === state.pendingTrade?.fromPlayerId)
+  state.pendingTrade = null
+  addLog(state, {
+    kind: 'trade-withdrawn',
+    playerId: from?.id ?? null,
+    message: `${from?.name ?? 'A player'} withdrew the trade.`,
+  })
   return { ok: true, state }
 }
 
@@ -909,7 +1099,7 @@ function handleMoveAnimal(
   const animal = state.animals.find((a) => a.id === animalId)
   if (!animal) return fail('Unknown animal.')
   if (animal.playerId !== player.id) return fail('That animal is not yours.')
-  if (animal.status === 'finished') return fail('That animal has already crossed.')
+  if (!isInPlay(animal)) return fail('That animal is no longer in play.')
 
   const tileBefore = tileAt(state.board, col, row)
   const willReveal = Boolean(tileBefore && tileBefore.hidden && !tileBefore.revealed)
@@ -962,6 +1152,13 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
     return fail('Finish the Distraction first: choose how far each animal is drawn in.')
   }
 
+  // Likewise a trade: it has to be answered before the turn carries on, so nobody can spend
+  // the resources they have just offered somebody else.
+  const TRADE_ACTIONS = new Set(['answer-trade', 'settle-trade', 'withdraw-trade'])
+  if (state.pendingTrade && !TRADE_ACTIONS.has(action.type)) {
+    return fail('There is a trade on the table. Settle it before doing anything else.')
+  }
+
   const draft = clone(state)
   if (draft.phase === 'player-turns' && UNDOABLE.has(action.type)) {
     pushUndo(draft)
@@ -1000,6 +1197,14 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
       return handleResolveDistraction(draft, action.moves)
     case 'remove-collector':
       return handleRemoveCollector(draft, action.playerId, action.index)
+    case 'propose-trade':
+      return handleProposeTrade(draft, action.toPlayerId, action.offer, action.request)
+    case 'answer-trade':
+      return handleAnswerTrade(draft)
+    case 'settle-trade':
+      return handleSettleTrade(draft, action.accept)
+    case 'withdraw-trade':
+      return handleWithdrawTrade(draft)
     case 'end-turn': {
       const player = requireTurn(draft)
       if (typeof player === 'string') return fail(player)
@@ -1022,7 +1227,7 @@ export function animalsOf(state: GameState, playerId: string): Animal[] {
 }
 
 export function activeAnimalsOf(state: GameState, playerId: string): Animal[] {
-  return animalsOf(state, playerId).filter((a) => a.status !== 'finished')
+  return animalsOf(state, playerId).filter((a) => isInPlay(a))
 }
 
 export function animalsAcross(state: GameState, playerId: string): number {

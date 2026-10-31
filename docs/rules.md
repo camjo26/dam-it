@@ -27,6 +27,9 @@ Taken from the brief and from the printed components in this folder.
   separately. Half the production deck pays nothing at all in one area, and only a card paying
   4 somewhere else is allowed to do that.
 - Four animals fit on a river square. The limit binds players, not the river.
+- An animal the current carries past the left or right edge is swept away and out of the game.
+- Every range is counted in straight lines along the rows and columns, never diagonally.
+- Players may trade resources and Power Cards with each other.
 - Every player has 1 Distraction token for the game.
 
 **Factions**
@@ -97,7 +100,10 @@ Chosen so the game is playable. Each is deliberately simple and reversible.
 | Production deck | 24 cards, 12 kinds, 2 each | The brief says the distribution is not settled. Yields average about 1.5 per area with real variance. | `production.cards` |
 | Collector sharing | no penalty | Nothing printed says sharing an area costs anything. | `production.sharingPenalty` |
 | Starting resources | none | Nothing says players start with any. | `game.startingResources` |
-| Edge of the board | animals stop at the edge | The brief does not say what happens to an animal pushed off the downstream end. | `current.edgeBehaviour` |
+| Edge of the board | swept away and out of the game | Asked for directly. Only the river does it: walking, a rope and a card all stop at the edge instead, so nobody can push a rival off by hand. | `current.edgeBehaviour` |
+| Dams hold the water | left and right, radius 1, including their own square | Asked for directly, and those squares now read 0 on the board until the dam is destroyed. | `dam.calmAxis` |
+| Range is orthogonal | yes | Asked for directly: three squares means three steps along the rows and columns, so a diagonal corner is further than it looks. Distraction tokens, ropes and Rescue all use it. | n/a |
+| Trading | on, free, one offer a turn | Offer resources and Power Cards, and say what you want back. Cards are asked for by number, not name, because a hand is secret. The other player takes it, leaves it, or names their own terms. | `trade.*` |
 | Current resolution order | downstream first | Any order works as long as it is fixed and visible. Ties always break by turn order then animal id. | `current.resolutionOrder` |
 | Backward movement | allowed | Nothing forbids it, and Push can move an animal backward anyway. | `movement.allowBackward` |
 | Diagonal movement | not allowed | The brief asks for a clear tile-by-tile system. | `movement.allowDiagonal` |
@@ -143,45 +149,47 @@ all of them are listed in the app under **How to play > Open questions**.
 
 ## What the numbers say
 
-From `pnpm sim -- --games 300`, v0.04 rules, Normal opponents, none failed. Raw data in
-`docs/balance/v0.04.csv`, with the two runs before it in `v0.03.csv` and `baseline.csv`.
+From `pnpm sim -- --games 300`, v0.05 rules, Normal opponents, none failed. Raw data in
+`docs/balance/v0.05.csv`, with the runs before it in `v0.04.csv`, `v0.03.csv` and
+`baseline.csv`.
 
 | Faction | Win % | Score | Animals across | Mission % | Built | Carried by the current |
 |---|---|---|---|---|---|---|
-| Ducks | 24 | 5.28 | 3.66 | 37 | 7.2 | 17.2 |
-| Swans | 16 | 4.95 | 3.56 | 32 | 7.1 | 6.6 |
-| Frogs | 19 | 5.32 | 3.32 | 46 | 6.8 | 14.8 |
-| Beavers | 21 | 5.09 | 3.51 | 35 | 8.9 | 16.3 |
+| Ducks | 24 | 4.90 | 3.11 | 41 | 7.1 | 16.8 |
+| Swans | 17 | 4.60 | 3.42 | 28 | 7.1 | 6.5 |
+| Frogs | 16 | 4.34 | 2.80 | 36 | 6.7 | 15.3 |
+| Beavers | 25 | 5.08 | 3.29 | 40 | 8.8 | 16.0 |
 
-**All three findings from v0.02 are now fixed or improving.**
+**Losing animals over the side costs about half an animal a game.** Crossings went from 3.5 to
+3.2 and scores from 5.2 to 4.7. That is a real cost without being a bloodbath, which is about
+where a new hazard wants to sit.
 
-**Crossings are up, from about 2.5 to about 3.5.** A quarter of the river pushes forward, so
-the current gives ground back as well as taking it. The depth-5 and 14-round experiments are
-no longer needed to make the race work.
+**Swan resistance has flipped from a drawback back into a strength, and it is worth
+understanding why.** In v0.03 and v0.04 it was costing them free forward rides, and they got
+the most animals across while winning least. The edges have now given the same ability a second
+job: Swans are moved by the current 6.5 times a game against everyone else's 16, so they are the
+faction the river almost never throws off the board. They still get the most animals across
+(3.42) and they still win least (17%). Whatever is costing them is not the river, and that is
+the open question in the numbers.
 
-**Power Cards get bought**, where before it was 0.07 a game. Frogs buy about 3 with their
-second action; everyone else about 1.
+**The Ducks' ability has grown a real downside**, which is worth watching. Go With the Flow
+carries them one square further than the current alone, and near an edge that extra square is
+what takes them over it. The logs are full of "Go With the Flow carried it that one square too
+far, over the edge". It has not hurt their win rate - they are joint top at 24% - but it is now
+a genuine trade rather than a free bonus.
 
-**The factions are closer together.** The win spread was 19 to 24 in v0.02, opened to 15 to 26
-in v0.03 when the river got fierce, and is 16 to 24 now. Four to a square is what pulled it
-back: Beavers dropped from 26% to 21% because a bought advantage is worth less when the board
-itself limits how much of your herd can occupy good water.
+**Frogs have slipped to last** at 16%, from 19-20% across the last two builds. They buy about
+3.5 Power Cards a game with their second action and spend 34 of their 39 resources, so they are
+converting income into cards rather than into crossings, and they get the fewest animals over
+(2.80). Either the cards are not paying for what they cost, or the second action is better spent
+on building.
 
-**Two things still worth a look.**
-
-**1. Swan resistance has become a drawback.** Swans are carried by the current 6.6 times a
-game against everyone else's 15 to 17, and they win least at 16%. Taking 1 off every current
-cancels most strength-1 tiles outright, and a quarter of those would have been pushing them
-*forward*. Resisting the river now means turning down free rides. It may want rebalancing as
-resistance that only applies to currents which cost them ground.
-
-**2. There is still more income than there is to spend it on.** A faction earns about 37
-resources across ten rounds and spends 18 to 34 of it. Beavers finish with half unspent. The
-blanks added in v0.04 did not reduce income, because the glut cards that earn a blank pay 4.
-Either the costs should rise, or a second action a turn would give players something to do
-with it.
+**Still worth a look: there is more income than there is to spend it on.** A faction earns about
+38 resources across ten rounds and spends 18 to 34. Beavers finish with half unspent. Trading
+has not changed this, because the computer opponents only ever answer offers - they never make
+them - so in an all-AI run no trade is ever proposed. What trading does in a game with a person
+in it is still untested by the simulator.
 
 One smaller note, unchanged: with no sharing penalty, where other players put their collectors
-never matters, so collector placement is still a private sum rather than a decision about
-anybody else. Setting `production.sharingPenalty` to 1 makes the Market contested, and it
+never matters. Setting `production.sharingPenalty` to 1 makes the Market contested, and it
 matters more now that there are two collectors each and half the deck has a blank.

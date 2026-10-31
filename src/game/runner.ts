@@ -37,6 +37,25 @@ export function autoStep(state: GameState): GameState | null {
     return result.ok ? result.state : null
   }
 
+  // A trade waiting on an opponent is answered before anything else, so the proposer is not
+  // left staring at an offer that never comes back.
+  const trade = state.pendingTrade
+  if (trade && trade.status === 'awaiting-reply') {
+    const them = state.players.find((p) => p.id === trade.toPlayerId)
+    if (!them || them.controller !== 'ai') return null
+    const result = applyAction(state, { type: 'answer-trade' })
+    return result.ok ? result.state : null
+  }
+  // A counter aimed at an AI is settled by it too.
+  if (trade && trade.status === 'countered') {
+    const proposer = state.players.find((p) => p.id === trade.fromPlayerId)
+    if (!proposer || proposer.controller !== 'ai') return null
+    const action = chooseAiAction(state, proposer.id)
+    if (!action) return null
+    const result = applyAction(state, action)
+    return result.ok ? result.state : null
+  }
+
   if (state.phase === 'resource') {
     // AI collectors go down first.
     for (const player of state.players) {

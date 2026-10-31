@@ -67,7 +67,12 @@ export interface Board {
   tiles: Tile[]
 }
 
-export type AnimalStatus = 'bank' | 'river' | 'finished'
+/**
+ * `lost` is an animal the river carried off the side of the board. It is out of the game and
+ * scores nothing, which is what makes a strong sideways current near an edge genuinely
+ * dangerous rather than merely annoying.
+ */
+export type AnimalStatus = 'bank' | 'river' | 'finished' | 'lost'
 
 export interface Animal {
   id: string
@@ -114,6 +119,9 @@ export interface PlayerStats {
   resourcesGained: ResourceBag
   resourcesSpent: ResourceBag
   animalsFinished: number
+  /** Animals the river carried off the side of the board. */
+  animalsLost: number
+  tradesAccepted: number
   currentMovesSuffered: number
   /** Animals across at the end of each round. Index 0 is round 1. */
   acrossByRound: number[]
@@ -230,6 +238,8 @@ export interface CurrentStep {
   effectiveStrength: number
   whirlpool: null | { direction: 'left' | 'right' | 'forward'; roll: number }
   finished: boolean
+  /** The river carried this animal over the side and out of the game. */
+  lost: boolean
 }
 
 export interface ProductionCardDef {
@@ -238,6 +248,33 @@ export interface ProductionCardDef {
   /** Resources produced for each collector sitting in that area. Never below 1. */
   yields: ResourceBag
   copies: number
+}
+
+/** One side of a trade: what that player hands over. */
+export interface TradeTerms {
+  resources: ResourceBag
+  cardInstanceIds: string[]
+}
+
+export type TradeStatus = 'awaiting-reply' | 'countered' | 'settled'
+
+/**
+ * A trade being negotiated. Cards are asked for by count rather than by name, because a hand
+ * is secret: you can offer a card you can see, but you cannot name one you cannot.
+ */
+export interface TradeProposal {
+  id: string
+  fromPlayerId: string
+  toPlayerId: string
+  /** What the proposer hands over if the deal closes. */
+  offer: TradeTerms
+  /** What the proposer asked for. */
+  request: { resources: ResourceBag; cardCount: number }
+  status: TradeStatus
+  /** Set when the other player answers with different terms of their own. */
+  counter?: TradeTerms
+  /** What the other player said, in words, shown to the proposer. */
+  reply?: string
 }
 
 /** One animal's die roll against a Distraction token. */
@@ -320,6 +357,10 @@ export interface GameState {
   saboteurUsesThisRound: Record<string, number>
   /** A Distraction token that has been played and whose drags are still being chosen. */
   pendingDistraction: PendingDistraction | null
+  /** A trade on the table, waiting for an answer from one side or the other. */
+  pendingTrade: TradeProposal | null
+  /** Trades proposed this turn, keyed by player id, against the per-turn limit. */
+  tradesProposedThisTurn: Record<string, number>
   /** Populated while the Current Phase is being stepped through for display. */
   currentSteps: CurrentStep[]
   /** Guards against the Current Phase being resolved twice in one round. */

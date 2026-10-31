@@ -428,6 +428,14 @@ h4 {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
 }
 
+/* Water a dam is holding at nothing. Green rather than the usual dark badge, so a glance
+   across the board shows how far the shelter reaches without reading the numbers. */
+.tile .current.calm-current {
+  color: #06250f;
+  background: var(--good);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
 /* The square a Distraction token is sitting on, while its rolls are being resolved. */
 .tile.distracting {
   box-shadow: inset 0 0 0 2px var(--warn), 0 0 14px rgba(255, 193, 71, 0.45);
@@ -771,6 +779,64 @@ h4 {
 .prod-note {
   margin-top: 8px;
   font-size: 11px;
+}
+
+/* ---------------------------------------------------------------------------- trading --- */
+
+.trade-builder {
+  border: 1px solid var(--panel-line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 10px;
+}
+
+/* The two halves of an offer are boxed separately, because the whole question a player is
+   answering is "is this side worth that side". */
+.trade-side {
+  border: 1px solid var(--panel-line);
+  border-radius: 8px;
+  padding: 7px 8px;
+  margin-bottom: 8px;
+}
+
+.trade-heading {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+.trade-rows { display: flex; flex-direction: column; gap: 3px; }
+
+.trade-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.trade-amount {
+  min-width: 16px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.trade-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--panel-line);
+}
+
+.trade-counter {
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 193, 71, 0.08);
+  font-size: 12px;
 }
 
 /* -------------------------------------------------------------------------------- lists --- */
@@ -1350,3 +1416,7 @@ h4 {
     grid-template-columns: 1fr;
   }
 }
+
+/* Animals the river took. Called out in red because they are gone for good, unlike the ones
+   still on the bank or in the water. */
+.lost-count { color: var(--bad); }

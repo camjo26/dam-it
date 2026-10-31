@@ -195,11 +195,12 @@ export const RULE_SECTIONS: RuleSection[] = [
         type: 'select',
         status: 'provisional',
         options: [
+          { value: 'swept-away', label: 'Swept away and out of the game' },
           { value: 'stop-at-edge', label: 'Stop at the edge' },
           { value: 'wrap-around', label: 'Wrap round to the other side' },
         ],
-        note: 'The brief does not say what happens to an animal pushed off the end. ' +
-          'Stopping is the gentler default.',
+        note: 'Only the river can do this. Walking, a rope and a card all stop at the edge ' +
+          'instead, so nobody can push a rival into the weir by hand.',
       },
       {
         path: 'current.resolutionOrder',
@@ -557,6 +558,43 @@ export const RULE_SECTIONS: RuleSection[] = [
     ],
   },
   {
+    id: 'trade',
+    title: 'Trading',
+    blurb: 'Offer another player resources and Power Cards for resources and Power Cards. ' +
+      'They take it, leave it, or name terms of their own for you to take or leave. Cards ' +
+      'are asked for by number rather than by name, because a hand is secret.',
+    fields: [
+      { path: 'trade.enabled', label: 'Trading in play', type: 'boolean',
+        status: 'provisional' },
+      {
+        path: 'trade.proposalsPerTurn',
+        label: 'Offers you may make a turn',
+        type: 'number',
+        status: 'provisional',
+        min: 0,
+        max: 5,
+      },
+      {
+        path: 'trade.usesAction',
+        label: 'Proposing a trade costs your action',
+        type: 'boolean',
+        status: 'provisional',
+        note: 'Off, so trading actually gets used. One offer a turn is the brake instead.',
+      },
+      {
+        path: 'trade.aiAcceptMargin',
+        label: 'How much better than even an opponent wants a deal',
+        type: 'number',
+        status: 'provisional',
+        min: 1,
+        max: 3,
+        step: 0.05,
+        note: '1 takes any deal that is not a loss. Higher drives a harder bargain, and ' +
+          'makes counter-offers more likely than plain acceptance.',
+      },
+    ],
+  },
+  {
     id: 'ai',
     title: 'Computer opponents',
     fields: [
@@ -693,6 +731,23 @@ export const OPEN_QUESTIONS: OpenQuestion[] = [
     current: 'Half sideways, a quarter forward, a quarter back. A current of 4 is always ' +
       'sideways, because forward at that strength is most of a free crossing. All of it is ' +
       'editable on the Board tab.',
+  },
+  {
+    id: 'edge-losses',
+    question:
+      'The river now carries an animal over the side of the board and out of the game for ' +
+      'good. Is losing animals outright the right penalty, or should a strong current near ' +
+      'an edge cost something less final?',
+    current: 'Swept away and gone. Only the river does it: walking, a rope and a card all ' +
+      'stop at the edge instead.',
+  },
+  {
+    id: 'trade-scope',
+    question:
+      'Trading swaps resources and Power Cards. Should equipment, or a Distraction token, ' +
+      'be tradeable too? And should an offer cost your action rather than being free once ' +
+      'a turn?',
+    current: 'Resources and Power Cards, free, one offer a turn.',
   },
   {
     id: 'stack-limit',

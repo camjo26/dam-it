@@ -10,7 +10,7 @@ import { useMemo } from 'react'
 
 import { bottomBankRow, tileAt } from '../game/board'
 import { damCalms } from '../game/current'
-import { coord } from '../game/movement'
+import { coord, isInPlay } from '../game/movement'
 import type { Animal, CurrentDirection, GameState, Tile } from '../game/types'
 import { BANK_BOTTOM_ART, BANK_TOP_ART, bg, factionArt, tileArt } from './art'
 
@@ -60,15 +60,29 @@ function isRevealed(tile: Tile, revealAll: boolean): boolean {
   return !tile.hidden || tile.revealed || revealAll
 }
 
-function currentLabel(tile: Tile, revealAll: boolean): { text: string; hidden: boolean } {
-  if (tile.kind === 'bank-top' || tile.kind === 'bank-bottom') return { text: '', hidden: false }
-  if (!isRevealed(tile, revealAll)) return { text: '?', hidden: true }
-  if (tile.current === 0) return { text: '', hidden: false }
-  return { text: `${tile.current}${DIRECTION_ARROWS[tile.direction]}`, hidden: false }
+function currentLabel(
+  tile: Tile,
+  revealAll: boolean,
+  calmed: boolean,
+): { text: string; hidden: boolean; calm: boolean } {
+  if (tile.kind === 'bank-top' || tile.kind === 'bank-bottom') {
+    return { text: '', hidden: false, calm: false }
+  }
+  // A dam holds the water at nothing whatever the tile says underneath, so the badge reads
+  // 0 rather than the strength that will come back when the dam goes.
+  if (calmed) return { text: '0', hidden: false, calm: true }
+  if (!isRevealed(tile, revealAll)) return { text: '?', hidden: true, calm: false }
+  if (tile.current === 0) return { text: '', hidden: false, calm: false }
+  return {
+    text: `${tile.current}${DIRECTION_ARROWS[tile.direction]}`,
+    hidden: false,
+    calm: false,
+  }
 }
 
-function describeCurrent(tile: Tile, revealAll: boolean): string {
+function describeCurrent(tile: Tile, revealAll: boolean, calmed: boolean): string {
   if (tile.kind === 'bank-top' || tile.kind === 'bank-bottom') return ''
+  if (calmed) return 'Held at 0 by a dam, until the dam is destroyed'
   if (!isRevealed(tile, revealAll)) return 'Face down until an animal enters it'
   if (tile.current === 0) return 'Still water'
   return `Current ${tile.current}, running ${tile.direction}`
@@ -109,7 +123,7 @@ export function Board({
   const byTile = useMemo(() => {
     const map = new Map<string, Animal[]>()
     for (const animal of state.animals) {
-      if (animal.status === 'finished') continue
+      if (!isInPlay(animal)) continue
       const key = `${animal.col},${animal.row}`
       const list = map.get(key)
       if (list) list.push(animal)
@@ -159,7 +173,8 @@ export function Board({
             const key = `${col},${row}`
             const animals = byTile.get(key) ?? []
             const revealed = isRevealed(tile, revealAllCurrents)
-            const label = currentLabel(tile, revealAllCurrents)
+            const calmed = calmedTiles.has(tile.id)
+            const label = currentLabel(tile, revealAllCurrents, calmed)
             const classes = ['tile', 'art']
 
             let art: Record<string, string>
@@ -185,7 +200,7 @@ export function Board({
             if (tile.kind === 'whirlpool') classes.push('whirlpool')
             if (legalKeys.has(key)) classes.push('legal', 'clickable')
             if (targetableSet.has(tile.id)) classes.push('targeting', 'clickable')
-            if (calmedTiles.has(tile.id)) classes.push('calmed')
+            if (calmed) classes.push('calmed')
             if (distractionKey === key) classes.push('distracting')
 
             const title = [
@@ -199,8 +214,7 @@ export function Board({
                     : tile.kind === 'whirlpool'
                       ? 'Whirlpool'
                       : 'River',
-              describeCurrent(tile, revealAllCurrents),
-              calmedTiles.has(tile.id) ? 'Calmed by a dam' : '',
+              describeCurrent(tile, revealAllCurrents, calmed),
               damsByTile.has(key) ? 'Dam built here' : '',
               distractionKey === key ? 'A Distraction token is on this square' : '',
             ]
@@ -218,7 +232,10 @@ export function Board({
               >
                 <span className={`tile-art${spin}`} style={art} />
                 {label.text && (
-                  <span className={`current${label.hidden ? ' hidden-current' : ''}`}>
+                  <span
+                    className={'current' + (label.hidden ? ' hidden-current' : '') +
+                      (label.calm ? ' calm-current' : '')}
+                  >
                     {label.text}
                   </span>
                 )}

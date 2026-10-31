@@ -54,6 +54,7 @@ function FactionCard({
   const across = owned.filter((a) => a.status === 'finished').length
   const onBank = owned.filter((a) => a.status === 'bank').length
   const inRiver = owned.filter((a) => a.status === 'river').length
+  const lost = owned.filter((a) => a.status === 'lost').length
 
   const gameOver = state.phase === 'finished'
   // Secrets are visible to the seat that owns them, or once the game is over.
@@ -77,6 +78,11 @@ function FactionCard({
         <span>Bank <b>{onBank}</b></span>
         <span>River <b>{inRiver}</b></span>
         <span>Across <b>{across}</b></span>
+        {lost > 0 && (
+          <span className="lost-count" title="Carried over the edge and out of the game">
+            Lost <b>{lost}</b>
+          </span>
+        )}
         <span>of <b>{faction.startingAnimals}</b></span>
       </div>
 

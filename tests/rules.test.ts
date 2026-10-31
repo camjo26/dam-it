@@ -232,7 +232,7 @@ describe('faction abilities', () => {
 })
 
 describe('equipment', () => {
-  it('a dam calms the water above and below until it is destroyed', () => {
+  it('a dam calms its own square and the one either side, until it is destroyed', () => {
     let state = makeGame({ currentStrength: 3 })
     state = startPlayerTurns(state)
     stockUp(state, 'ducks')
@@ -241,14 +241,20 @@ describe('equipment', () => {
     state = must(state, { type: 'place-dam', col: 4, row: 3 })
 
     const duck = animalsOf(state, 'ducks')[0]
-    put(state, state.animals.find((a) => a.id === duck.id)!, 4, 2)
-    const sheltered = assessCurrent(state, state.animals.find((a) => a.id === duck.id)!)
-    expect(sheltered.effectiveStrength).toBe(0)
+    const at = (col: number, row: number) => {
+      put(state, state.animals.find((a) => a.id === duck.id)!, col, row)
+      return assessCurrent(state, state.animals.find((a) => a.id === duck.id)!).effectiveStrength
+    }
 
-    // Two rows above the dam is outside the calm radius of 1.
-    put(state, state.animals.find((a) => a.id === duck.id)!, 4, 1)
-    const exposed = assessCurrent(state, state.animals.find((a) => a.id === duck.id)!)
-    expect(exposed.effectiveStrength).toBe(3)
+    // The dam's own square and the squares left and right of it are all still.
+    expect(at(4, 3)).toBe(0)
+    expect(at(3, 3)).toBe(0)
+    expect(at(5, 3)).toBe(0)
+
+    // Two squares along is outside the calm radius of 1, and so is directly above it:
+    // a dam holds the water back across the river, not up and down it.
+    expect(at(6, 3)).toBe(3)
+    expect(at(4, 2)).toBe(3)
   })
 
   it('the dam owner can bar one animal from its shelter each round', () => {

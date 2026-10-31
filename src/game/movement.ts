@@ -26,7 +26,7 @@ import type { Animal, GameState, Player, Tile } from './types'
 export function animalsOnTile(state: GameState, col: number, row: number): number {
   let count = 0
   for (const animal of state.animals) {
-    if (animal.status === 'finished') continue
+    if (!isInPlay(animal)) continue
     if (animal.col === col && animal.row === row) count += 1
   }
   return count
@@ -100,8 +100,24 @@ export function isFinished(animal: Animal): boolean {
   return animal.status === 'finished'
 }
 
+/**
+ * Still on the board and still playable. An animal that has crossed has left the board with
+ * its point, and one the river has swept off the side has left it with nothing; neither can
+ * be moved, targeted or counted again.
+ */
+export function isInPlay(animal: Animal): boolean {
+  return animal.status !== 'finished' && animal.status !== 'lost'
+}
+
 export function isMovable(animal: Animal): boolean {
-  return !isFinished(animal)
+  return isInPlay(animal)
+}
+
+/** Takes an animal out of the game for good, swept off the side of the river. */
+export function loseAnimal(state: GameState, animal: Animal): void {
+  animal.status = 'lost'
+  const player = state.players.find((p) => p.id === animal.playerId)
+  if (player) player.stats.animalsLost += 1
 }
 
 /** Movement points available to this animal: its own bonus plus the player's shared pool. */
@@ -210,6 +226,12 @@ export interface SlideOptions {
    * standing there rather than choosing. See MAX_ANIMALS_NOTE above.
    */
   ignoreCapacity?: boolean
+  /**
+   * Lets this slide carry an animal over the side of the board and out of the game, when
+   * the edge rule says so. Set for the same river effects, and never for a player's own
+   * move, a rope or a card: nobody gets to push a rival into the weir by hand.
+   */
+  canSweepOff?: boolean
 }
 
 /**
@@ -225,7 +247,7 @@ export function slideAnimal(
   dr: number,
   distance: number,
   options: SlideOptions = {},
-): { moved: number; finished: boolean } {
+): { moved: number; finished: boolean; lost: boolean } {
   const finishRow = bottomBankRow(state.board)
   let moved = 0
   for (let step = 0; step < distance; step += 1) {
@@ -233,12 +255,20 @@ export function slideAnimal(
     const nextRow = animal.row + dr
 
     if (nextCol < 0 || nextCol >= state.board.width) {
-      if (state.rules.current.edgeBehaviour === 'wrap-around') {
+      const edge = state.rules.current.edgeBehaviour
+      if (edge === 'wrap-around') {
         nextCol = (nextCol + state.board.width) % state.board.width
+      } else if (edge === 'swept-away' && options.canSweepOff) {
+        // Over the side and out of the game. Only the river can do this: a player's own
+        // move, a rope or a card stops at the edge instead.
+        loseAnimal(state, animal)
+        return { moved, finished: false, lost: true }
       } else {
         break
       }
     }
+    // Rows are clamped whatever the edge rule says: past the far bank is a crossing, and
+    // behind the top bank is dry land rather than an edge to be washed over.
     if (nextRow < TOP_BANK_ROW || nextRow > finishRow) break
     if (!options.ignoreCapacity && tileIsFull(state, nextCol, nextRow)) break
 
@@ -246,7 +276,7 @@ export function slideAnimal(
     moved += 1
     if (animal.status === 'finished') break
   }
-  return { moved, finished: animal.status === 'finished' }
+  return { moved, finished: animal.status === 'finished', lost: false }
 }
 
 export function coord(col: number, row: number): string {

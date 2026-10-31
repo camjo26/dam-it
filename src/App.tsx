@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { activePlayer } from './game/engine'
-import { legalDestinations } from './game/movement'
+import { isInPlay, legalDestinations } from './game/movement'
 import type { GameRules } from './game/rules'
 import type { PlayerSetup } from './game/setup'
 import type { Animal, AiDifficulty, CurrentStep, GameState, Tile } from './game/types'
@@ -24,6 +24,7 @@ import { RulesEditor } from './ui/RulesEditor'
 import { RulesReference } from './ui/RulesReference'
 import { ScoreScreen } from './ui/ScoreScreen'
 import { SetupScreen } from './ui/SetupScreen'
+import { TradeReply } from './ui/TradePanel'
 import { DistractionResolution, TurnPanel } from './ui/TurnPanel'
 import { targetingComplete, type Targeting } from './ui/targeting'
 import { VERSION } from './version'
@@ -88,7 +89,7 @@ export default function App() {
     if (!state || !selectedAnimalId) return
     const animal = state.animals.find((a) => a.id === selectedAnimalId)
     const active = activePlayer(state)
-    if (!animal || animal.status === 'finished' || animal.playerId !== active?.id) {
+    if (!animal || !isInPlay(animal) || animal.playerId !== active?.id) {
       setSelectedAnimalId(null)
     }
   }, [state, selectedAnimalId])
@@ -127,12 +128,12 @@ export default function App() {
       if (pick === 'adjacent-island') {
         const animal = state.animals.find((a) => a.id === targeting.target.animalId)
         if (!animal) return []
+        // Next to means one square along a row or a column, never diagonally.
         return state.board.tiles
           .filter(
             (t) =>
               t.kind === 'island' &&
-              Math.abs(t.col - animal.col) <= 1 &&
-              Math.abs(t.row - animal.row) <= 1,
+              Math.abs(t.col - animal.col) + Math.abs(t.row - animal.row) === 1,
           )
           .map((t) => t.id)
       }
@@ -292,6 +293,12 @@ export default function App() {
           step: targeting.step + 1,
           target: { ...targeting.target, animalId: animal.id },
         })
+      } else if (pick === 'second-own-animal') {
+        setTargeting({
+          ...targeting,
+          step: targeting.step + 1,
+          target: { ...targeting.target, secondAnimalId: animal.id },
+        })
       }
       return
     }
@@ -395,6 +402,7 @@ export default function App() {
         </div>
 
         <div className="column">
+          <TradeReply state={state} dispatch={game.dispatch} />
           <DistractionResolution state={state} dispatch={game.dispatch} />
           <ProductionCard state={state} />
           <TurnPanel

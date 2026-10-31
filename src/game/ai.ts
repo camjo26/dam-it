@@ -16,14 +16,15 @@ import {
   autoPayment,
   canAfford,
   equipmentCost,
-  tileDistance,
+  orthogonalDistance,
   totalResources,
   type GameAction,
 } from './engine'
-import { legalDestinations } from './movement'
+import { isInPlay, legalDestinations } from './movement'
 import { deriveFloat } from './rng'
 import { missionById } from './missions'
 import { collectorsLeft } from './production'
+import { valueGaining, valueGiving } from './trade'
 import { COLLECTOR_AREAS } from './rules'
 import { saboteurUsesLeft } from './roles'
 import type {
@@ -226,6 +227,10 @@ const COLLECTOR_REPEAT_DAMPING = 0.55
 // the AI's own animals, counting only opponents it would actually drag backward.
 const DISTRACTION_MIN_GAIN = 2
 
+// Kept in step with CARD_WORTH in trade.ts, so an AI judging a counter-offer and an AI
+// judging an offer are using the same scales.
+const AI_CARD_WORTH = 3
+
 function chooseCollectorArea(state: GameState, player: Player): ResourceId {
   const wanted: Record<ResourceId, number> = { wood: 0, stone: 0, clay: 0, reeds: 0 }
 
@@ -409,8 +414,8 @@ function distractionSpot(state: GameState, player: Player): Tile | null {
     if (tile.kind === 'bank-top' || tile.kind === 'bank-bottom') continue
     let score = 0
     for (const animal of state.animals) {
-      if (animal.status === 'finished') continue
-      if (tileDistance(animal, tile) > radius) continue
+      if (!isInPlay(animal)) continue
+      if (orthogonalDistance(animal, tile) > radius) continue
       if (animal.playerId === player.id) score -= 1
       else if (animal.row > tile.row) score += 1
     }
@@ -425,6 +430,19 @@ function distractionSpot(state: GameState, player: Player): Tile | null {
 export function chooseAiAction(state: GameState, playerId: string): GameAction | null {
   const player = state.players.find((p) => p.id === playerId)
   if (!player) return null
+
+  // A counter-offer aimed at this player is weighed with the same scales the opponents use
+  // to judge an offer, so an AI proposer is neither a soft touch nor impossible to deal with.
+  const trade = state.pendingTrade
+  if (trade && trade.status === 'countered' && trade.fromPlayerId === playerId) {
+    const counter = trade.counter
+    if (!counter) return { type: 'withdraw-trade' }
+    const gain = valueGaining(state.rules, player, counter.resources) +
+      counter.cardInstanceIds.length * AI_CARD_WORTH
+    const cost = valueGiving(state.rules, player, trade.offer.resources) +
+      trade.offer.cardInstanceIds.length * AI_CARD_WORTH
+    return { type: 'settle-trade', accept: gain >= cost }
+  }
 
   // A token it played is resolved before anything else: opponents are dragged as far as the
   // rules allow, and its own animals are left exactly where they are.
@@ -458,7 +476,7 @@ export function chooseAiAction(state: GameState, playerId: string): GameAction |
     if (card) return card
     if (saboteurUsesLeft(state, player) > 0) {
       const theirs = state.animals.filter(
-        (a) => a.playerId !== player.id && a.status !== 'finished',
+        (a) => a.playerId !== player.id && isInPlay(a),
       )
       const target = theirs.reduce<Animal | null>(
         (best, a) => (best === null || a.row > best.row ? a : best),

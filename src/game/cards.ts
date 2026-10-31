@@ -6,9 +6,9 @@
 // pointed at so the interface can prompt for it.
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-import { adjacentCoords } from './board'
+import { orthogonalNeighbours } from './board'
 import { addLog } from './log'
-import { coord, slideAnimal } from './movement'
+import { coord, isInPlay, placeAnimal, slideAnimal, tileIsFull } from './movement'
 import type {
   Animal,
   CurrentDirection,
@@ -18,10 +18,12 @@ import type {
   ResourceId,
   Tile,
 } from './types'
-import { RESOURCE_LABELS } from './types'
+import { CURRENT_VECTORS, RESOURCE_LABELS } from './types'
 
 export interface CardTarget {
   animalId?: string
+  /** A second animal of your own, for cards that move one of yours to another. */
+  secondAnimalId?: string
   tileId?: string
   secondTileId?: string
   direction?: 'left' | 'right' | 'forward' | 'backward'
@@ -32,16 +34,27 @@ export interface CardTarget {
 
 export interface CardRequirement {
   ownAnimal?: boolean
+  secondOwnAnimal?: boolean
   enemyAnimal?: boolean
   tile?: boolean
   secondTile?: boolean
-  direction?: 'sideways' | 'forward-back'
+  direction?: 'sideways' | 'forward-back' | 'any'
   resourceChoices?: number
   adjacentIsland?: boolean
   summary: string
 }
 
 export const CARD_REQUIREMENTS: Record<string, CardRequirement> = {
+  'break-for-it': {
+    ownAnimal: true,
+    direction: 'any',
+    summary: 'Choose one of your animals and the way it should break.',
+  },
+  rally: {
+    ownAnimal: true,
+    secondOwnAnimal: true,
+    summary: 'Choose the animal to move, then the animal of yours it joins.',
+  },
   tow: { ownAnimal: true, summary: 'Choose one of your animals to tow forward.' },
   pull: {
     enemyAnimal: true,
@@ -90,7 +103,7 @@ type CardEffect = (
 
 function findAnimal(state: GameState, id: string | undefined): Animal | undefined {
   if (!id) return undefined
-  return state.animals.find((a) => a.id === id && a.status !== 'finished')
+  return state.animals.find((a) => a.id === id && isInPlay(a))
 }
 
 function findTile(state: GameState, id: string | undefined): Tile | undefined {
@@ -147,6 +160,42 @@ function addModifier(
 }
 
 export const CARD_EFFECTS: Record<string, CardEffect> = {
+  'break-for-it': (state, player, card, target) => {
+    const animal = requireOwnAnimal(state, player, target)
+    if (typeof animal === 'string') return { ok: false, error: animal }
+    const chosen = target.direction
+    if (!chosen) return { ok: false, error: 'Choose a direction to break in.' }
+    // The card says "any direction", which is the four the animals themselves move in.
+    const heading: CurrentDirection = chosen === 'backward' ? 'back' : chosen
+    const { dc, dr } = CURRENT_VECTORS[heading]
+    const distance = Math.min(target.distance ?? card.magnitude, card.magnitude)
+    const result = slideAnimal(state, animal, dc, dr, distance)
+    if (result.moved === 0) {
+      return { ok: false, error: 'That animal cannot break that way: blocked, full or the ' +
+        'edge of the river.' }
+    }
+    return {
+      ok: true,
+      detail: `Broke ${result.moved} ${chosen} to ${coord(animal.col, animal.row)}.`,
+    }
+  },
+
+  rally: (state, player, _card, target) => {
+    const animal = requireOwnAnimal(state, player, target)
+    if (typeof animal === 'string') return { ok: false, error: animal }
+    const rallyTo = findAnimal(state, target.secondAnimalId)
+    if (!rallyTo || rallyTo.playerId !== player.id) {
+      return { ok: false, error: 'Choose a second animal of your own to rally to.' }
+    }
+    if (rallyTo.id === animal.id) return { ok: false, error: 'Choose two different animals.' }
+    if (tileIsFull(state, rallyTo.col, rallyTo.row)) {
+      return { ok: false, error: 'That square is already full.' }
+    }
+    const from = coord(animal.col, animal.row)
+    placeAnimal(state, animal, rallyTo.col, rallyTo.row)
+    return { ok: true, detail: `Rallied from ${from} to ${coord(animal.col, animal.row)}.` }
+  },
+
   tow: (state, player, card, target) => {
     const animal = requireOwnAnimal(state, player, target)
     if (typeof animal === 'string') return { ok: false, error: animal }
@@ -176,7 +225,7 @@ export const CARD_EFFECTS: Record<string, CardEffect> = {
     const tile = findTile(state, target.tileId)
     if (!tile) return { ok: false, error: 'Choose a tile.' }
     const occupied = state.animals.some(
-      (a) => a.status !== 'finished' && a.col === tile.col && a.row === tile.row,
+      (a) => isInPlay(a) && a.col === tile.col && a.row === tile.row,
     )
     if (!occupied) return { ok: false, error: 'Redirect only works on an occupied tile.' }
     // Turns the tile's own current around, whichever of the four ways it was running.
@@ -263,13 +312,17 @@ export const CARD_EFFECTS: Record<string, CardEffect> = {
     if (typeof animal === 'string') return { ok: false, error: animal }
     const tile = findTile(state, target.tileId)
     if (!tile || tile.kind !== 'island') return { ok: false, error: 'Choose an island.' }
-    const neighbours = adjacentCoords(state.board, animal.col, animal.row)
+    const neighbours = orthogonalNeighbours(state.board, animal.col, animal.row)
     const adjacent = neighbours.some(([c, r]) => c === tile.col && r === tile.row)
-    if (!adjacent) return { ok: false, error: 'That island is not next to the animal.' }
-    animal.col = tile.col
-    animal.row = tile.row
-    animal.status = 'river'
-    if (!animal.islandsVisited.includes(tile.id)) animal.islandsVisited.push(tile.id)
+    if (!adjacent) {
+      return { ok: false, error: 'That island is not next to the animal: next to means one ' +
+        'square along a row or a column, never diagonally.' }
+    }
+    if (tileIsFull(state, tile.col, tile.row)) {
+      return { ok: false, error: 'That island is already full.' }
+    }
+    // Through placeAnimal, so the island visit and the status are recorded the one way.
+    placeAnimal(state, animal, tile.col, tile.row)
     return { ok: true, detail: `Rescued onto the island at ${coord(tile.col, tile.row)}.` }
   },
 

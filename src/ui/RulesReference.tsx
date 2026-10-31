@@ -122,6 +122,7 @@ function HowToPlay({ rules }: { rules: GameRules }) {
       <ul className="rules-list">
         <li>Build a dam, raft, rope or anchor. Click the <b>?</b> on any of them to see
           exactly what it does before you spend anything.</li>
+        {rules.trade.enabled && <li>Offer another player a trade.</li>}
         <li>Buy a Power Card, drawn face down for {rules.powerCards.cost} resources of any mix.</li>
         <li>Destroy somebody&apos;s dam.</li>
         {rules.distraction.enabled && <li>Play your Distraction token.</li>}
@@ -150,10 +151,20 @@ function HowToPlay({ rules }: { rules: GameRules }) {
           it stays turned over for everybody. Finding out costs you the animal that found out.
         </li>
         <li>
+          <b>The edges are fatal.</b> If the current carries an animal past the left or right
+          side of the board it is <b>swept away and out of the game</b>, scoring nothing. Only
+          the river can do this: your own moves, a rope and a card all stop at the edge.
+        </li>
+        <li>
           A river square holds <b>{rules.board.maxAnimalsPerTile} animals</b>. That stops you
           moving onto a full square, and it stops a rope, a raft, a card or a Distraction
           putting one there. It does <b>not</b> stop the river: the current carries every
           animal standing on a tile, so a stack driven into the bank piles up past four.
+        </li>
+        <li>
+          <b>Every range in the game is counted in straight lines</b>, the way the animals
+          move. Three squares means three steps along the rows and columns, so a corner two
+          across and two down is four away, not two.
         </li>
         <li>
           <b>Whirlpools</b> roll for left, right or forward, and affect each animal at most{' '}
@@ -212,6 +223,27 @@ function HowToPlay({ rules }: { rules: GameRules }) {
         </>
       )}
 
+      {rules.trade.enabled && (
+        <>
+          <div className="section-title">Trading</div>
+          <ul className="rules-list">
+            <li>
+              Offer any other player resources and Power Cards, and say what you want back.
+              You may make {rules.trade.proposalsPerTurn} offer a turn, and it
+              {rules.trade.usesAction ? ' costs your action' : ' is free'}.
+            </li>
+            <li>
+              Ask for Power Cards <b>by number, not by name</b>: a hand is secret, so you
+              cannot ask for a card you have never seen, and they choose which to part with.
+            </li>
+            <li>
+              They take it, leave it, or name terms of their own, which you then take or
+              leave. Nothing else can happen at the table until it is settled.
+            </li>
+          </ul>
+        </>
+      )}
+
       {rules.roles.enabled && (
         <>
           <div className="section-title">Secret roles</div>
@@ -261,17 +293,19 @@ function ResolutionOrder({ rules }: { rules: GameRules }) {
             : 'Islands do not shelter in the current rules.'}
         </li>
         <li>
-          Dams, which calm the water{' '}
-          {rules.dam.calmAxis === 'vertical' ? 'above and below' : 'upstream and downstream'}{' '}
-          within {rules.dam.calmRadius} square, unless the owner has barred that animal this
-          round.
+          Dams, which hold the water at 0{' '}
+          {rules.dam.calmAxis === 'vertical' ? 'above and below' : 'to the left and right of'}{' '}
+          them, within {rules.dam.calmRadius} square and on their own square, unless the owner
+          has barred that animal this round. Those squares read 0 on the board until the dam
+          is destroyed.
         </li>
         <li>An <b>Anchor</b>, then a <b>Current Shield</b>. Either makes the animal immune.</li>
         <li>Swan resistance, which never takes the strength below zero.</li>
         <li>
-          The animal is pushed that many squares in that tile&apos;s own direction, stopping
-          at the edge of the river. A forward push can carry it over the far bank and score;
-          a backward one can put it back on the starting bank.
+          The animal is pushed that many squares in that tile&apos;s own direction. A forward
+          push can carry it over the far bank and score; a backward one can put it back on the
+          starting bank; and a sideways one can carry it over the side of the board, where it
+          is lost for good.
         </li>
         <li>
           Ducks then ride <b>one extra square</b>, but only if the current actually moved them,

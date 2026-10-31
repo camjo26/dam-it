@@ -30,7 +30,11 @@ export type CurrentOrderId =
 
 export type WhirlpoolTrigger = 'end-of-current-move' | 'any-tile-entered'
 
-export type EdgeBehaviour = 'stop-at-edge' | 'wrap-around'
+/**
+ * What becomes of an animal the river pushes past the left or right edge of the board.
+ * `swept-away` takes it out of the game for good.
+ */
+export type EdgeBehaviour = 'swept-away' | 'stop-at-edge' | 'wrap-around'
 
 export type DamCalmAxis = 'vertical' | 'horizontal'
 
@@ -141,6 +145,14 @@ export interface GameRules {
     hardAvoidOnRoll: number
     /** Squares the player who placed the token may drag each distracted animal. */
     pullDistance: number
+  }
+  trade: {
+    enabled: boolean
+    /** Proposing a trade costs the turn's action. */
+    usesAction: boolean
+    proposalsPerTurn: number
+    /** How much better than even a deal must look before an opponent takes it. */
+    aiAcceptMargin: number
   }
   production: {
     cards: ProductionCardDef[]
@@ -265,9 +277,32 @@ export const DEFAULT_PRODUCTION_CARDS: ProductionCardDef[] = [
   { id: 'cold-snap', name: 'Cold Snap', yields: bag(1, 2, 1, 2), copies: 2 },
 ]
 
-// The twelve printed Power Cards. Three copies of each except River Shift and Whirlpool,
-// which have two, giving 34 cards in total.
+/**
+ * The Power Card deck: 34 cards, as printed, plus two of the deck's own making.
+ *
+ * The shuffle itself is sound - it was measured over 4000 random seeds and comes out flat -
+ * so the deck drawing samey is a question of what is in it rather than how it is dealt. The
+ * copy counts are therefore a quality ladder: the two cards that simply hand you a better
+ * board position are the rarest, the situational middle is the bulk of the deck, and Current
+ * Shield, which does nothing at all on a calm tile, has been thinned out.
+ */
 export const DEFAULT_POWER_CARDS: PowerCardDef[] = [
+  {
+    id: 'break-for-it',
+    name: 'Break for It',
+    text: 'Move one of your animals up to 2 spaces in any one direction.',
+    timing: 'turn',
+    copies: 2,
+    magnitude: 2,
+  },
+  {
+    id: 'rally',
+    name: 'Rally',
+    text: "Move one of your animals to another of your animals' square.",
+    timing: 'turn',
+    copies: 2,
+    magnitude: 0,
+  },
   {
     id: 'tow',
     name: 'Tow',
@@ -287,9 +322,9 @@ export const DEFAULT_POWER_CARDS: PowerCardDef[] = [
   {
     id: 'redirect',
     name: 'Redirect',
-    text: 'Change the direction of the current on one occupied tile for this round.',
+    text: 'Turn the current on one occupied tile right around for this round.',
     timing: 'before-current',
-    copies: 3,
+    copies: 2,
     magnitude: 0,
   },
   {
@@ -335,9 +370,9 @@ export const DEFAULT_POWER_CARDS: PowerCardDef[] = [
   {
     id: 'rescue',
     name: 'Rescue',
-    text: 'Move one of your animals onto an adjacent island.',
+    text: 'Move one of your animals onto an island next to it.',
     timing: 'turn',
-    copies: 3,
+    copies: 2,
     magnitude: 1,
   },
   {
@@ -353,7 +388,7 @@ export const DEFAULT_POWER_CARDS: PowerCardDef[] = [
     name: 'Double Move',
     text: 'One animal may take an additional 2 movement this turn.',
     timing: 'turn',
-    copies: 3,
+    copies: 2,
     magnitude: 2,
   },
   {
@@ -361,7 +396,7 @@ export const DEFAULT_POWER_CARDS: PowerCardDef[] = [
     name: 'Current Shield',
     text: 'One of your animals ignores its current during the next Current Phase.',
     timing: 'before-current',
-    copies: 3,
+    copies: 2,
     magnitude: 0,
   },
 ]
@@ -478,7 +513,7 @@ export const DEFAULT_RULES: GameRules = {
   },
   current: {
     direction: 'right',
-    edgeBehaviour: 'stop-at-edge',
+    edgeBehaviour: 'swept-away',
     resolutionOrder: 'downstream-first',
     affectsBankAnimals: false,
   },
@@ -553,6 +588,14 @@ export const DEFAULT_RULES: GameRules = {
     hardAvoidOnRoll: 6,
     pullDistance: 3,
   },
+  trade: {
+    enabled: true,
+    // Free, so it actually gets used in a playtest. It is limited to one a turn instead,
+    // which stops the table being flooded with offers.
+    usesAction: false,
+    proposalsPerTurn: 1,
+    aiAcceptMargin: 1.1,
+  },
   production: {
     cards: DEFAULT_PRODUCTION_CARDS,
     collectorsPerPlayer: 2,
@@ -593,7 +636,7 @@ export const DEFAULT_RULES: GameRules = {
     anchorRounds: 1,
   },
   dam: {
-    calmAxis: 'vertical',
+    calmAxis: 'horizontal',
     calmRadius: 1,
     calmsOwnTile: true,
     destroyCost: bag(0, 2, 0, 0),

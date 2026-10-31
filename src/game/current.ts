@@ -19,7 +19,7 @@
 
 import { bottomBankRow, tileAt, TOP_BANK_ROW } from './board'
 import { addLog } from './log'
-import { coord, isFinished, placeAnimal } from './movement'
+import { coord, isFinished, isInPlay, loseAnimal, placeAnimal } from './movement'
 import type { GameRules } from './rules'
 import { weightedIndex } from './rng'
 import type {
@@ -164,7 +164,7 @@ function orderedAnimals(state: GameState): Animal[] {
   const rules = state.rules
   const flowing = flowSign(rules.current.direction)
   const eligible = state.animals.filter((animal) => {
-    if (animal.status === 'finished') return false
+    if (!isInPlay(animal)) return false
     if (animal.row === TOP_BANK_ROW && !rules.current.affectsBankAnimals) return false
     return true
   })
@@ -213,7 +213,7 @@ function push(
   dc: number,
   dr: number,
   distance: number,
-): { moved: number; path: Tile[] } {
+): { moved: number; path: Tile[]; lost: boolean } {
   const finishRow = bottomBankRow(state.board)
   const path: Tile[] = []
   let moved = 0
@@ -223,8 +223,12 @@ function push(
     const nextRow = animal.row + dr
 
     if (nextCol < 0 || nextCol >= state.board.width) {
-      if (state.rules.current.edgeBehaviour === 'wrap-around') {
+      const edge = state.rules.current.edgeBehaviour
+      if (edge === 'wrap-around') {
         nextCol = (nextCol + state.board.width) % state.board.width
+      } else if (edge === 'swept-away') {
+        loseAnimal(state, animal)
+        return { moved, path, lost: true }
       } else {
         break
       }
@@ -238,7 +242,7 @@ function push(
     if (animal.status === 'finished') break
   }
 
-  return { moved, path }
+  return { moved, path, lost: false }
 }
 
 function rollWhirlpool(
@@ -287,7 +291,10 @@ export function resolveCurrentPhase(state: GameState): CurrentStep[] {
       const result = push(state, animal, dc, dr, assessment.effectiveStrength)
       totalMoved += result.moved
       tilesEntered.push(...result.path)
-      if (result.moved < assessment.effectiveStrength) {
+      if (result.lost) {
+        reasons.push(`Carried over the ${assessment.direction === 'left' ? 'left' : 'right'} ` +
+          `edge of the river and lost.`)
+      } else if (result.moved < assessment.effectiveStrength) {
         reasons.push(`Stopped by the edge of the river after ${result.moved} of ` +
           `${assessment.effectiveStrength} squares.`)
       } else {
@@ -297,9 +304,12 @@ export function resolveCurrentPhase(state: GameState): CurrentStep[] {
 
       // 8. Ducks ride the current one square further.
       const faction = rules.factions[animal.factionId]
-      if (faction.goWithTheFlowBonus > 0 && result.moved > 0 && !isFinished(animal)) {
+      if (faction.goWithTheFlowBonus > 0 && result.moved > 0 && isInPlay(animal)) {
         const bonus = push(state, animal, dc, dr, faction.goWithTheFlowBonus)
         tilesEntered.push(...bonus.path)
+        if (bonus.lost) {
+          reasons.push('Go With the Flow carried it that one square too far, over the edge.')
+        }
         if (bonus.moved > 0) {
           totalMoved += bonus.moved
           reasons.push(`Go With the Flow: ${bonus.moved} extra ` +
@@ -319,7 +329,7 @@ export function resolveCurrentPhase(state: GameState): CurrentStep[] {
     // 9. Whirlpool, at most once per animal per phase. Which whirlpool counts depends on the
     //    trigger rule: the one the animal came to rest on, or the first one it was dragged
     //    through on the way.
-    if (rules.whirlpool.enabled && !isFinished(animal)) {
+    if (rules.whirlpool.enabled && isInPlay(animal)) {
       const restTile = tileAt(state.board, animal.col, animal.row)
       let caught = restTile?.kind === 'whirlpool' ? restTile : undefined
       if (!caught && rules.whirlpool.trigger === 'any-tile-entered') {
@@ -350,13 +360,16 @@ export function resolveCurrentPhase(state: GameState): CurrentStep[] {
         animal.crossedWhirlpool = true
         whirlpoolsUsed += 1
         whirlpool = { direction: finalDirection, roll: finalRoll }
-        reasons.push(`Whirlpool spun it ${finalDirection} ${spun.moved} ` +
-          `${plural(spun.moved, 'square')}.`)
+        reasons.push(spun.lost
+          ? `The whirlpool spun it ${finalDirection}, over the edge and out of the game.`
+          : `Whirlpool spun it ${finalDirection} ${spun.moved} ` +
+            `${plural(spun.moved, 'square')}.`)
       }
     }
 
     const to = { col: animal.col, row: animal.row }
     const finished = isFinished(animal)
+    const lost = animal.status === 'lost'
     if (finished) reasons.push('Carried onto the far bank and scored.')
 
     const step: CurrentStep = {
@@ -370,18 +383,22 @@ export function resolveCurrentPhase(state: GameState): CurrentStep[] {
       effectiveStrength: assessment.effectiveStrength,
       whirlpool,
       finished,
+      lost,
     }
     steps.push(step)
 
     const owner = state.players.find((p) => p.id === animal.playerId)
     const movedAtAll = from.col !== to.col || from.row !== to.row
     addLog(state, {
-      kind: movedAtAll ? 'current-move' : 'current-hold',
+      kind: lost ? 'current-lost' : movedAtAll ? 'current-move' : 'current-hold',
       playerId: animal.playerId,
-      message: movedAtAll
-        ? `${owner?.name ?? 'An animal'} was carried from ${coord(from.col, from.row)} to ` +
-          `${coord(to.col, to.row)}.`
-        : `${owner?.name ?? 'An animal'} held position at ${coord(from.col, from.row)}.`,
+      message: lost
+        ? `${owner?.name ?? 'An animal'} lost an animal over the edge at ` +
+          `${coord(from.col, from.row)}.`
+        : movedAtAll
+          ? `${owner?.name ?? 'An animal'} was carried from ${coord(from.col, from.row)} to ` +
+            `${coord(to.col, to.row)}.`
+          : `${owner?.name ?? 'An animal'} held position at ${coord(from.col, from.row)}.`,
       detail: step.reason,
     })
   }

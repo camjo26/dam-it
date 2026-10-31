@@ -9,12 +9,13 @@ import { cardById } from '../game/cards'
 import { assessCurrent } from '../game/current'
 import { activePlayer, canAfford, equipmentCost, totalResources } from '../game/engine'
 import type { GameAction } from '../game/engine'
-import { coord, describeTile } from '../game/movement'
+import { coord, describeTile, isInPlay } from '../game/movement'
 import { collectorsLeft } from '../game/production'
 import { COLLECTOR_AREAS } from '../game/rules'
 import type { Animal, EquipmentId, GameState, Player, ResourceId } from '../game/types'
 import { EQUIPMENT_IDS, RESOURCE_IDS, RESOURCE_LABELS } from '../game/types'
 import { bg, equipmentArt, factionArt, resourceArt } from './art'
+import { TradePanel } from './TradePanel'
 import { startCardTargeting, targetingPrompt, type Targeting } from './targeting'
 
 export interface TurnPanelProps {
@@ -197,6 +198,8 @@ function PlayerTurnPanel({
           setTargeting={setTargeting}
         />
 
+        <TradePanel state={state} player={player} dispatch={dispatch} />
+
         <DamControls state={state} player={player} dispatch={dispatch} />
 
         <div className="section-title">Power Cards in hand ({player.hand.length})</div>
@@ -257,7 +260,7 @@ function SelectedAnimal({
   setSelectedAnimalId: (id: string | null) => void
 }) {
   const mine = state.animals.filter(
-    (a) => a.playerId === player.id && a.status !== 'finished',
+    (a) => a.playerId === player.id && isInPlay(a),
   )
 
   if (!animal) {
@@ -856,9 +859,17 @@ function DirectionAndResourcePicks({
 }) {
   const pick = targeting.picks[targeting.step]
 
-  if (pick === 'direction-sideways' || pick === 'direction-forward-back') {
+  if (
+    pick === 'direction-sideways' ||
+    pick === 'direction-forward-back' ||
+    pick === 'direction-any'
+  ) {
     const options: Array<'left' | 'right' | 'forward' | 'backward'> =
-      pick === 'direction-sideways' ? ['left', 'right'] : ['forward', 'backward']
+      pick === 'direction-sideways'
+        ? ['left', 'right']
+        : pick === 'direction-forward-back'
+          ? ['forward', 'backward']
+          : ['left', 'right', 'forward', 'backward']
     return (
       <div className="row wrap" style={{ marginTop: 6 }}>
         {options.map((direction) => (

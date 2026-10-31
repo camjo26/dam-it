@@ -1,4 +1,4 @@
-export const VERSION = '0.04'
+export const VERSION = '0.05'
 
 export interface ChangelogEntry {
   version: string
@@ -8,6 +8,22 @@ export interface ChangelogEntry {
 
 // Newest first.
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.05',
+    date: '2026-10-31',
+    notes: [
+      'The river now carries an animal over the side of the board and out of the game. '
+        + 'Only the river does it: walking, a rope and a card all stop at the edge.',
+      'Ranges are counted in straight lines, never diagonally, so three squares means three '
+        + 'steps along the rows and columns. Distraction tokens, ropes and Rescue all changed.',
+      'Dams hold the water to the left and right of them instead of above and below, and '
+        + 'those squares now read 0 on the board until the dam is destroyed.',
+      'Trading: offer another player resources and Power Cards. They take it, leave it, or '
+        + 'name their own terms for you to take or leave.',
+      'Two new Power Cards: Break for It moves an animal up to 2 in any direction, and Rally '
+        + 'brings one of your animals to another. The weaker cards are rarer.',
+    ],
+  },
   {
     version: '0.04',
     date: '2026-10-31',

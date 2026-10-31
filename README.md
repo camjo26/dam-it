@@ -75,6 +75,30 @@ fifth onto one. It does *not* stop the river: the current carries every animal s
 tile, so a stack driven into the bank piles up past four rather than some of it being left
 behind.
 
+**The sides of the board are fatal.** An animal the current pushes past the left or right edge
+is **swept away and out of the game**, scoring nothing. Only the river does this - your own
+moves, a rope and a card all stop at the edge, so nobody can shove a rival off by hand. The
+Ducks' extra square makes them the likeliest to go over.
+
+**Every range is counted in straight lines**, the way the animals move. Three squares means
+three steps along the rows and columns, so a corner two across and two down is four away, not
+two. Distraction tokens, ropes and Rescue all work this way.
+
+**Dams hold the water either side of them.** The dam's own square and the one to its left and
+right all read **0** on the board, until somebody destroys it.
+
+### Trading
+
+Offer any other player resources and Power Cards, and say what you want back. One offer a
+turn, and it costs you nothing but the asking. They take it, leave it, or name their own terms
+for you to take or leave.
+
+Power Cards are asked for **by number, not by name**: a hand is secret, so you cannot ask for
+a card you have never seen, and they choose which to part with. The computer opponents value
+what you offer by what they are actually short of for the things they still want to build, so
+a Beaver sitting on spare stone will deal for the one clay that finishes a dam - and will not
+hand over the last stone it needs itself.
+
 ### Distraction tokens
 
 Everyone has one, for the whole game. Playing it is your action. Drop it on a river tile and
@@ -152,21 +176,20 @@ pnpm sim -- --games 150 --seed test --set board.riverDepth=5
 
 ## What the simulator says so far
 
-300 games at Normal, v0.04 rules, none failed, in `docs/balance/v0.04.csv`:
+300 games at Normal, v0.05 rules, none failed, in `docs/balance/v0.05.csv`:
 
 | Faction | Win % | Score | Animals across | Mission % | Built | Carried by the current |
 |---|---|---|---|---|---|---|
-| Ducks | 24 | 5.28 | 3.66 | 37 | 7.2 | 17.2 |
-| Swans | 16 | 4.95 | 3.56 | 32 | 7.1 | 6.6 |
-| Frogs | 19 | 5.32 | 3.32 | 46 | 6.8 | 14.8 |
-| Beavers | 21 | 5.09 | 3.51 | 35 | 8.9 | 16.3 |
+| Ducks | 24 | 4.90 | 3.11 | 41 | 7.1 | 16.8 |
+| Swans | 17 | 4.60 | 3.42 | 28 | 7.1 | 6.5 |
+| Frogs | 16 | 4.34 | 2.80 | 36 | 6.7 | 15.3 |
+| Beavers | 25 | 5.08 | 3.29 | 40 | 8.8 | 16.0 |
 
-Crossings are up from about 2.5 in v0.02 to about 3.5, now that a quarter of the river pushes
-forward, and Power Cards actually get bought. The four-to-a-square limit also pulled the
-factions back together: the spread was 15 to 26 in v0.03 and is 16 to 24 now, with Beavers no
-longer running away with it. The standout finding is that **Swan resistance has become a
-drawback**: they get plenty of animals across and still win least, because taking 1 off every
-current also means turning down the forward ones. Findings worth a look are in
+Losing animals over the side costs about half an animal a game: crossings are down from 3.5 to
+3.2 and scores from 5.2 to 4.7. **Swan resistance has quietly become an advantage again** - they
+are carried 6.5 times a game against everyone else's 16, so they are the faction the edges
+rarely take, and they now get the most animals across. They still win least, which is the
+puzzle worth a look. Findings are in
 [docs/rules.md](docs/rules.md#what-the-numbers-say).
 
 ## How it is put together
