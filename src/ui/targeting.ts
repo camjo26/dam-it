@@ -60,7 +60,7 @@ export function cardPicks(cardId: string): PickKind[] {
 
 export type Targeting =
   | { kind: 'place-dam' }
-  | { kind: 'rope'; animalId: string | null }
+  | { kind: 'rope'; animalId: string | null; towardAnimalId?: string }
   | { kind: 'saboteur' }
   | { kind: 'distraction' }
   | {
@@ -93,9 +93,9 @@ export function targetingPrompt(targeting: Targeting): string | null {
       'including your own animals.'
   }
   if (targeting.kind === 'rope') {
-    return targeting.animalId === null
-      ? 'Click the animal you want to pull.'
-      : 'Click the animal of yours to pull it toward.'
+    if (targeting.animalId === null) return 'Click the animal you want to pull.'
+    if (!targeting.towardAnimalId) return 'Click the animal of yours to pull it toward.'
+    return 'Which way should it set off? It has two squares to spend.'
   }
   const pick = targeting.picks[targeting.step]
   return pick ? PICK_PROMPTS[pick] : null

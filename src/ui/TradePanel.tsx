@@ -13,7 +13,7 @@ import type { GameAction } from '../game/engine'
 import { bagTotal, describeTerms } from '../game/trade'
 import type { GameState, Player, ResourceBag } from '../game/types'
 import { RESOURCE_IDS, RESOURCE_LABELS } from '../game/types'
-import { bg, resourceArt } from './art'
+import { bg, factionArt, resourceArt } from './art'
 
 function emptyBag(): ResourceBag {
   return { wood: 0, stone: 0, clay: 0, reeds: 0 }
@@ -321,3 +321,73 @@ export function TradeReply({
   )
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * What came back from a trade, as a popup rather than a line in the log.
+ *
+ * A computer opponent answers in the same instant the offer goes out, so there is no pause to
+ * watch and nothing to wait for: without stopping the screen the whole negotiation would
+ * happen between one click and the next, and the answer would scroll past unread.
+ */
+export function TradeOutcomePopup({
+  state,
+  dispatch,
+}: {
+  state: GameState
+  dispatch: (action: GameAction) => boolean
+}) {
+  const outcome = state.tradeOutcome
+  if (!outcome) return null
+
+  const them = state.players.find((p) => p.id === outcome.toPlayerId)
+  const close = () => dispatch({ type: 'dismiss-trade-outcome' })
+
+  return (
+    <div className="overlay" onClick={close}>
+      <div className="modal small" onClick={(event) => event.stopPropagation()}>
+        <header>
+          {them && (
+            <span className={`pip ${them.factionId}`} style={bg(factionArt(them.factionId))} />
+          )}
+          <h2>{outcome.headline}</h2>
+          <span className="spacer" />
+          <button className="btn ghost" onClick={close}>
+            Close
+          </button>
+        </header>
+        <div className="body">
+          <div className="hint" style={{ marginBottom: 10 }}>{outcome.terms}</div>
+          {outcome.detail && <div className="faint">{outcome.detail}</div>}
+
+          {outcome.status === 'countered' ? (
+            <div className="row" style={{ marginTop: 14 }}>
+              <button
+                className="btn primary"
+                style={{ flex: 1 }}
+                onClick={() => dispatch({ type: 'settle-trade', accept: true })}
+              >
+                Take it
+              </button>
+              <button
+                className="btn danger"
+                onClick={() => dispatch({ type: 'settle-trade', accept: false })}
+              >
+                Leave it
+              </button>
+            </div>
+          ) : (
+            <button
+              className="btn primary"
+              style={{ width: '100%', marginTop: 14 }}
+              onClick={close}
+            >
+              Right you are
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

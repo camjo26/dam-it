@@ -24,7 +24,7 @@ import { RulesEditor } from './ui/RulesEditor'
 import { RulesReference } from './ui/RulesReference'
 import { ScoreScreen } from './ui/ScoreScreen'
 import { SetupScreen } from './ui/SetupScreen'
-import { TradeReply } from './ui/TradePanel'
+import { TradeOutcomePopup, TradeReply } from './ui/TradePanel'
 import { DistractionResolution, TurnPanel } from './ui/TurnPanel'
 import { targetingComplete, type Targeting } from './ui/targeting'
 import { VERSION } from './version'
@@ -275,6 +275,15 @@ export default function App() {
         setTargeting({ kind: 'rope', animalId: animal.id })
         return
       }
+      // The rope reaches six squares and pulls two, so it usually stops well short of the
+      // animal at the other end. Where the two are neither in the same row nor the same
+      // column that makes the way it sets off a real choice, and the player makes it.
+      const puller = state.animals.find((a) => a.id === targeting.animalId)
+      const corner = Boolean(puller && puller.col !== animal.col && puller.row !== animal.row)
+      if (corner && puller?.id !== animal.id) {
+        setTargeting({ ...targeting, towardAnimalId: animal.id })
+        return
+      }
       if (game.dispatch({
         type: 'use-rope',
         animalId: targeting.animalId,
@@ -440,6 +449,8 @@ export default function App() {
       <div className="faint" style={{ textAlign: 'center', padding: '6px 0 16px' }}>
         Dam It playtest build v{VERSION}
       </div>
+
+      <TradeOutcomePopup state={state} dispatch={game.dispatch} />
 
       {modal === 'current-report' && report && (
         <CurrentReport

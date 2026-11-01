@@ -34,6 +34,13 @@ describe('movement', () => {
     }
 
     expect(playerOf(state, 'ducks').movementRemaining).toBe(0)
+
+    // The Ducks also have one extra square for a single animal, which this one takes.
+    const fourth = state.animals.find((a) => a.id === duck.id)!
+    state = must(state, { type: 'move-animal', animalId: duck.id, col: fourth.col,
+      row: fourth.row + 1 })
+    expect(playerOf(state, 'ducks').bonusAnimalMoveRemaining).toBe(0)
+
     const animal = state.animals.find((a) => a.id === duck.id)!
     const error = expectRejected(state, { type: 'move-animal', animalId: duck.id,
       col: animal.col, row: animal.row + 1 })
@@ -175,16 +182,31 @@ describe('the current', () => {
 })
 
 describe('faction abilities', () => {
-  it('Ducks ride the current one square further', () => {
+  it('Ducks ride the current no further than anybody else', () => {
+    // Go With the Flow was the mirror image of Swan resistance, which made one of the pair
+    // strictly better than the other. It is off, and the Ducks have an extra square on land
+    // instead. The knob still works, and is covered below.
     let state = makeGame({ currentStrength: 1 })
     state = startPlayerTurns(state)
     const duck = animalsOf(state, 'ducks')[0]
-    const swan = animalsOf(state, 'swans')[0]
     put(state, state.animals.find((a) => a.id === duck.id)!, 0, 2)
-    put(state, state.animals.find((a) => a.id === swan.id)!, 0, 3)
 
     state = must(reachCurrentPhase(state), { type: 'resolve-current' })
-    // Current 1 plus the Go With the Flow bonus of 1.
+    expect(state.animals.find((a) => a.id === duck.id)!.col).toBe(1)
+  })
+
+  it('still rides further when Go With the Flow is switched back on', () => {
+    let state = makeGame({
+      currentStrength: 1,
+      tweak: (rules) => {
+        rules.factions.ducks.goWithTheFlowBonus = 1
+      },
+    })
+    state = startPlayerTurns(state)
+    const duck = animalsOf(state, 'ducks')[0]
+    put(state, state.animals.find((a) => a.id === duck.id)!, 0, 2)
+
+    state = must(reachCurrentPhase(state), { type: 'resolve-current' })
     expect(state.animals.find((a) => a.id === duck.id)!.col).toBe(2)
   })
 
@@ -310,9 +332,9 @@ describe('equipment', () => {
     expect(state.animals.find((a) => a.id === duck.id)!.col).toBe(1)
     expect(state.animals.find((a) => a.id === duck.id)!.anchoredThroughRound).toBeNull()
 
-    // Round two: no anchor, so the current and the duck bonus both apply.
+    // Round two: no anchor, so the current of 2 moves it two squares.
     state = must(reachCurrentPhase(startPlayerTurns(state)), { type: 'resolve-current' })
-    expect(state.animals.find((a) => a.id === duck.id)!.col).toBe(4)
+    expect(state.animals.find((a) => a.id === duck.id)!.col).toBe(3)
   })
 
   it('a raft moves an animal forward without spending movement', () => {

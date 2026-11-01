@@ -84,6 +84,11 @@ export function loadGame(): GameState | null {
   if (!Array.isArray(state.pendingWhirlpoolRerolls)) state.pendingWhirlpoolRerolls = []
   if (!state.saboteurUsesThisRound) state.saboteurUsesThisRound = {}
   if (state.pendingDistraction === undefined) state.pendingDistraction = null
+  if (state.tradeOutcome === undefined) state.tradeOutcome = null
+  for (const player of state.players) {
+    if (player.bonusAnimalId === undefined) player.bonusAnimalId = null
+    if (player.bonusAnimalMoveRemaining === undefined) player.bonusAnimalMoveRemaining = 0
+  }
 
   // v0.03 gave every tile its own direction and replaced the single collector with two.
   // A game saved before that cannot be patched into a sensible shape - a board with no

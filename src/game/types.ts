@@ -153,6 +153,14 @@ export interface Player {
   collectors: ResourceId[]
   /** Unplayed Distraction tokens. One per player per game by default. */
   distractionTokens: number
+  /**
+   * The one animal carrying the faction's extra square. It is named the first time that
+   * square is spent and is the same animal from then on, which is the whole point of it.
+   * Null until then, and again if that animal leaves the board.
+   */
+  bonusAnimalId: string | null
+  /** The faction's extra square for that one animal, still unspent this turn. */
+  bonusAnimalMoveRemaining: number
   movementRemaining: number
   actionsRemaining: number
   powerCardsPlayedThisRound: number
@@ -277,6 +285,25 @@ export interface TradeProposal {
   reply?: string
 }
 
+export type TradeOutcomeStatus = 'accepted' | 'declined' | 'countered'
+
+/**
+ * The answer to a trade, held for the popup that reports it.
+ *
+ * The proposal itself is gone by the time an accept or a refusal is shown, so the words are
+ * stored rather than rebuilt from a proposal that no longer exists.
+ */
+export interface TradeOutcome {
+  status: TradeOutcomeStatus
+  fromPlayerId: string
+  toPlayerId: string
+  headline: string
+  /** What the other player said about it, in words. */
+  detail: string
+  /** What changed hands, or what was asked for and turned down. */
+  terms: string
+}
+
 /** One animal's die roll against a Distraction token. */
 export interface DistractionRoll {
   animalId: string
@@ -361,6 +388,8 @@ export interface GameState {
   pendingTrade: TradeProposal | null
   /** Trades proposed this turn, keyed by player id, against the per-turn limit. */
   tradesProposedThisTurn: Record<string, number>
+  /** The last answer to a trade this player proposed, until they have read it. */
+  tradeOutcome: TradeOutcome | null
   /** Populated while the Current Phase is being stepped through for display. */
   currentSteps: CurrentStep[]
   /** Guards against the Current Phase being resolved twice in one round. */

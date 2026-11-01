@@ -120,9 +120,22 @@ export function loseAnimal(state: GameState, animal: Animal): void {
   if (player) player.stats.animalsLost += 1
 }
 
-/** Movement points available to this animal: its own bonus plus the player's shared pool. */
+/**
+ * True when this animal may draw on the faction's one-animal allowance: either it is the
+ * animal already named, or nobody has been named yet and spending it would name this one.
+ */
+export function canUseOneAnimalBonus(player: Player, animal: Animal): boolean {
+  if (player.bonusAnimalMoveRemaining <= 0) return false
+  return player.bonusAnimalId === null || player.bonusAnimalId === animal.id
+}
+
+/**
+ * Movement available to this animal: its own card bonus, the player's shared pool, and the
+ * faction's extra square if this is the animal entitled to it.
+ */
 export function availableMovement(player: Player, animal: Animal): number {
-  return player.movementRemaining + animal.bonusMovement
+  const favoured = canUseOneAnimalBonus(player, animal) ? player.bonusAnimalMoveRemaining : 0
+  return player.movementRemaining + animal.bonusMovement + favoured
 }
 
 export function canStepTo(
@@ -160,12 +173,30 @@ export function canStepTo(
   return { ok: true }
 }
 
-/** Spends movement from the animal's own bonus pool first, then the player's shared pool. */
+/**
+ * Spends movement: the animal's own card bonus first, then the player's shared pool, and the
+ * faction's one-animal square last of all.
+ *
+ * That order is what makes it an extra square rather than a substitute for one. It is only
+ * reached once the shared pool is empty, so the animal it names is the one still walking
+ * after everybody else has stopped - and spending it is the naming.
+ */
 export function spendMovement(player: Player, animal: Animal, amount: number): void {
   let remaining = amount
   const fromBonus = Math.min(animal.bonusMovement, remaining)
   animal.bonusMovement -= fromBonus
   remaining -= fromBonus
+
+  const fromPool = Math.min(Math.max(0, player.movementRemaining), remaining)
+  player.movementRemaining -= fromPool
+  remaining -= fromPool
+
+  if (remaining > 0 && canUseOneAnimalBonus(player, animal)) {
+    const fromFavoured = Math.min(player.bonusAnimalMoveRemaining, remaining)
+    player.bonusAnimalMoveRemaining -= fromFavoured
+    remaining -= fromFavoured
+    player.bonusAnimalId = animal.id
+  }
   player.movementRemaining -= remaining
 }
 

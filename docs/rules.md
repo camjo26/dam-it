@@ -39,7 +39,7 @@ Taken from the brief and from the printed components in this folder.
 
 | | Animals | Move | Ability | Weakness |
 |---|---|---|---|---|
-| Ducks | 10 | 3 | Go With the Flow: one extra square when the current moves them | Distraction, see below |
+| Ducks | 10 | 3 | One animal of theirs moves one extra square, every turn, all game | Distraction, see below |
 | Swans | 8 | 3 | The current affects them one less | |
 | Frogs | 10 | 3 | One extra action per turn | No anchors, no ropes |
 | Beavers | 10 | 3 | Everything they build costs one resource less | |
@@ -52,13 +52,14 @@ action: build equipment, buy a Power Card, use a special ability, or an action a
 | | Cost | Effect |
 |---|---|---|
 | Dam | 3 Wood, 2 Stone, 1 Clay | Calms the water above and below. Stays until destroyed. |
-| Raft | 2 Wood, 1 Reed | Move one animal forward without using a movement point. |
+| Raft | 1 Wood, 1 Stone, 1 Clay, 1 Reed | Move one animal forward without using a movement point. |
 | Anchor | 1 Stone, 1 Clay | One animal ignores the current for the round. Removed at the end of the Current Phase. |
-| Rope | 2 Wood, 2 Reeds | Move an animal up to 2 squares toward another of yours within 3 squares. |
+| Rope | 1 Wood, 1 Clay, 2 Reeds | Move an animal up to 2 squares toward another of yours within 6 squares. You choose whether it sets off across the river or along it. |
 | Power Card | 4 resources, any mix | Drawn face down. One played per player per round. Cannot be traded. Held between rounds. |
 
 **Dams.** The owner chooses one animal per round that cannot use the calming effect. Destroying
-a dam sweeps the animals immediately downstream 2 squares.
+a dam sweeps the animals immediately downstream 2 squares, and the water it was holding back
+bursts through: every square it was calming runs at 3 from then on.
 
 **Whirlpools** roll for left, right or forward. Each animal is affected at most once per
 Current Phase.
@@ -105,8 +106,11 @@ Chosen so the game is playable. Each is deliberately simple and reversible.
 | Starting resources | none | Nothing says players start with any. | `game.startingResources` |
 | Edge of the board | swept away and out of the game | Asked for directly. Only the river does it: walking, a rope and a card all stop at the edge instead, so nobody can push a rival off by hand. | `current.edgeBehaviour` |
 | Dams hold the water | left and right, radius 1, including their own square | Asked for directly, and those squares now read 0 on the board until the dam is destroyed. | `dam.calmAxis` |
+| A destroyed dam bursts | the squares it calmed run at 3 | Asked for directly: the water it was holding has to go somewhere, so the safest line on the board becomes the worst of it. Zero sends those squares back to the strength they were rolled at. | `dam.burstCurrent` |
+| Four animals to a square | yes, on river squares | Binds anything a player chooses to do, including a Distraction drag, which is refused outright rather than quietly stopping the last animal short. It does not bind the river: a current carries every animal on a tile, so a square can hold five through nobody's choice, and a drag that adds nothing to such a square is still legal. | `board.maxAnimalsPerTile` |
+| The Ducks' ability | one animal, one extra square, named by use | Go With the Flow was the mirror image of Swan resistance, so one of the two was always going to be strictly better. The extra square is spent after the shared movement, and whichever animal spends it first keeps it for the rest of the game. The knob is still there. | `factions.ducks.oneAnimalBonus` |
 | Range is orthogonal | yes | Asked for directly: three squares means three steps along the rows and columns, so a diagonal corner is further than it looks. Distraction tokens, ropes and Rescue all use it. | n/a |
-| Trading | on, free, one offer a turn | Offer resources and Power Cards, and say what you want back. Cards are asked for by number, not name, because a hand is secret. The other player takes it, leaves it, or names their own terms. | `trade.*` |
+| Trading | on, free, one offer a turn | Offer resources and Power Cards, and say what you want back. Cards are asked for by number, not name, because a hand is secret. The other player takes it, leaves it, or names their own terms. A computer opponent answers inside the same action, and the answer is reported in a popup rather than only in the log. | `trade.*` |
 | Current resolution order | downstream first | Any order works as long as it is fixed and visible. Ties always break by turn order then animal id. | `current.resolutionOrder` |
 | Backward movement | allowed | Nothing forbids it, and Push can move an animal backward anyway. | `movement.allowBackward` |
 | Diagonal movement | not allowed | The brief asks for a clear tile-by-tile system. | `movement.allowDiagonal` |
@@ -152,46 +156,41 @@ all of them are listed in the app under **How to play > Open questions**.
 
 ## What the numbers say
 
-From `pnpm sim -- --games 300`, v0.05 rules, Normal opponents, none failed. Raw data in
-`docs/balance/v0.05.csv`, with the runs before it in `v0.04.csv`, `v0.03.csv` and
+From `pnpm sim -- --games 200`, v0.07 rules, Normal opponents, none failed. Raw data in
+`docs/balance/v0.07.csv`, with the runs before it in `v0.05.csv`, `v0.04.csv`, `v0.03.csv` and
 `baseline.csv`.
 
 | Faction | Win % | Score | Animals across | Mission % | Built | Carried by the current |
 |---|---|---|---|---|---|---|
-| Ducks | 24 | 4.90 | 3.11 | 41 | 7.1 | 16.8 |
-| Swans | 17 | 4.60 | 3.42 | 28 | 7.1 | 6.5 |
-| Frogs | 16 | 4.34 | 2.80 | 36 | 6.7 | 15.3 |
-| Beavers | 25 | 5.08 | 3.29 | 40 | 8.8 | 16.0 |
+| Ducks | 31.5 | 5.06 | 3.42 | 37 | 6.4 | 18.6 |
+| Swans | 17 | 4.29 | 3.13 | 27 | 6.4 | 6.3 |
+| Frogs | 16 | 3.76 | 2.24 | 35.5 | 4.5 | 15.1 |
+| Beavers | 20 | 4.45 | 2.96 | 34 | 7.8 | 15.6 |
 
-**Losing animals over the side costs about half an animal a game.** Crossings went from 3.5 to
-3.2 and scores from 5.2 to 4.7. That is a real cost without being a bloodbath, which is about
-where a new hazard wants to sit.
+**The Ducks' new ability is stronger than the one it replaced, and it is worth deciding
+whether that is wanted.** They have gone from 24% to 31.5% and now get the most animals across.
+The reason is not hard to see: Go With the Flow only paid out when the current happened to move
+them, and near an edge it was actively dangerous, while an extra square every turn pays every
+turn and carries no risk at all. If it wants trimming, the honest knobs are
+`factions.ducks.oneAnimalBonus` or the Ducks' animal count.
 
-**Swan resistance has flipped from a drawback back into a strength, and it is worth
-understanding why.** In v0.03 and v0.04 it was costing them free forward rides, and they got
-the most animals across while winning least. The edges have now given the same ability a second
-job: Swans are moved by the current 6.5 times a game against everyone else's 16, so they are the
-faction the river almost never throws off the board. They still get the most animals across
-(3.42) and they still win least (17%). Whatever is costing them is not the river, and that is
-the open question in the numbers.
+**Losing animals over the side costs about half an animal a game.** Unchanged from v0.05:
+crossings sit around 3.2 and scores around 4.7. A real cost without being a bloodbath, which is
+about where a new hazard wants to sit.
 
-**The Ducks' ability has grown a real downside**, which is worth watching. Go With the Flow
-carries them one square further than the current alone, and near an edge that extra square is
-what takes them over it. The logs are full of "Go With the Flow carried it that one square too
-far, over the edge". It has not hurt their win rate - they are joint top at 24% - but it is now
-a genuine trade rather than a free bonus.
+**Swan resistance is still not paying for itself.** Swans are carried by the current 6.3 times
+a game against everyone else's 15 to 19, so the river almost never throws them off the board,
+and they still win least but one at 17%. Whatever is holding them back is not the water.
 
-**Frogs have slipped to last** at 16%, from 19-20% across the last two builds. They buy about
-3.5 Power Cards a game with their second action and spend 34 of their 39 resources, so they are
-converting income into cards rather than into crossings, and they get the fewest animals over
-(2.80). Either the cards are not paying for what they cost, or the second action is better spent
-on building.
+**Frogs are last at 16%, and the second action looks like the reason.** They buy 3.6 Power
+Cards a game, spend 32 of their 36 resources, build the fewest things (4.5) and get the fewest
+animals across (2.24). They are converting income into cards rather than into crossings.
 
-**Still worth a look: there is more income than there is to spend it on.** A faction earns about
-38 resources across ten rounds and spends 18 to 34. Beavers finish with half unspent. Trading
-has not changed this, because the computer opponents only ever answer offers - they never make
-them - so in an all-AI run no trade is ever proposed. What trading does in a game with a person
-in it is still untested by the simulator.
+**Still worth a look: there is more income than there is to spend it on.** A faction earns
+about 36 resources across ten rounds and spends 24 to 32. Trading has not changed this, because
+the computer opponents only ever answer offers - they never make them - so in an all-AI run no
+trade is ever proposed. What trading does in a game with a person in it is still untested by
+the simulator.
 
 One smaller note, unchanged: with no sharing penalty, where other players put their collectors
 never matters. Setting `production.sharingPenalty` to 1 makes the Market contested, and it

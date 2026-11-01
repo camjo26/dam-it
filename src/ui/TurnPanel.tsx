@@ -7,8 +7,14 @@ import { useState } from 'react'
 
 import { cardById } from '../game/cards'
 import { assessCurrent } from '../game/current'
-import { activePlayer, canAfford, equipmentCost, totalResources } from '../game/engine'
-import type { GameAction } from '../game/engine'
+import {
+  activePlayer,
+  canAfford,
+  distractionLanding,
+  equipmentCost,
+  totalResources,
+} from '../game/engine'
+import type { GameAction, RopeAxis } from '../game/engine'
 import { coord, describeTile, isInPlay } from '../game/movement'
 import { collectorsLeft } from '../game/production'
 import { COLLECTOR_AREAS } from '../game/rules'
@@ -149,6 +155,7 @@ function PlayerTurnPanel({
 
   const selected = state.animals.find((a) => a.id === selectedAnimalId) ?? null
   const prompt = targetingPrompt(targeting)
+  const named = state.animals.find((a) => a.id === player.bonusAnimalId)
 
   return (
     <div className="panel">
@@ -161,6 +168,21 @@ function PlayerTurnPanel({
         <span className="chip active">
           <strong>{player.actionsRemaining}</strong> act
         </span>
+        {player.bonusAnimalMoveRemaining > 0 && (
+          <span
+            className="chip"
+            title={
+              named
+                ? 'This faction moves one animal an extra square, and it is this one from ' +
+                  'now on.'
+                : 'This faction moves one animal an extra square. Whichever animal spends ' +
+                  'it is the one that keeps it for the rest of the game.'
+            }
+          >
+            +{player.bonusAnimalMoveRemaining} for{' '}
+            <strong>{named ? coord(named.col, named.row) : 'one animal'}</strong>
+          </span>
+        )}
       </header>
       <div className="body">
         {prompt && (
@@ -177,6 +199,14 @@ function PlayerTurnPanel({
               targeting={targeting}
               setTargeting={setTargeting}
             />}
+            {targeting?.kind === 'rope' && targeting.animalId && targeting.towardAnimalId && (
+              <RopeAxisPicks
+                animalId={targeting.animalId}
+                towardAnimalId={targeting.towardAnimalId}
+                dispatch={dispatch}
+                setTargeting={setTargeting}
+              />
+            )}
           </div>
         )}
 
@@ -366,6 +396,13 @@ function equipmentInfo(state: GameState, item: EquipmentId): string[] {
       'It stays until somebody destroys it. When it goes, anything just downstream is ' +
         `swept ${rules.dam.sweepDistance} squares.`,
     )
+    if (rules.dam.burstCurrent > 0) {
+      lines.push(
+        'And the water it was holding back bursts through: every square it was calming ' +
+          `runs at ${rules.dam.burstCurrent} from then on, which is worse than it was ` +
+          'before the dam went up.',
+      )
+    }
   }
 
   if (item === 'raft') {
@@ -380,7 +417,9 @@ function equipmentInfo(state: GameState, item: EquipmentId): string[] {
   if (item === 'rope') {
     lines.push(
       `Pulls one of your animals up to ${fx.ropeDistance} squares toward another of your ` +
-        `animals, as long as the two are within ${fx.ropeRange} squares of each other.`,
+        `animals, from as far as ${fx.ropeRange} squares away.`,
+      'You say which way it sets off, across the river or up and down it, so the two ' +
+        'squares need not both be spent on the same line.',
       'The way out of a bad tile when you have no movement left, or a way to gather a group.',
       'Single use. Frogs cannot use ropes.',
     )
@@ -655,6 +694,17 @@ export function DistractionResolution({
   const missed = pending.rolls.length - caught.length
   const distanceFor = (animalId: string) => moves[animalId] ?? max
 
+  // Everything is being dragged toward one square, and only four animals fit on a square.
+  // Counted here as well as refused in the engine, so the player can see it coming rather
+  // than press the button and be told no.
+  const chosen = caught.map((roll) => ({
+    animalId: roll.animalId,
+    distance: distanceFor(roll.animalId),
+  }))
+  const cap = state.rules.board.maxAnimalsPerTile
+  const landing = distractionLanding(state, pending, chosen)
+  const overfull = landing.arriving > landing.room
+
   return (
     <div className="panel">
       <header>Distraction at {coord(pending.col, pending.row)}</header>
@@ -668,6 +718,17 @@ export function DistractionResolution({
         {caught.length === 0 && (
           <div className="faint" style={{ marginBottom: 10 }}>
             Nobody was caught. The token is spent either way.
+          </div>
+        )}
+
+        {overfull && (
+          <div className="error" style={{ marginBottom: 10 }}>
+            <span style={{ flex: 1 }}>
+              Only {cap} animals fit on {coord(pending.col, pending.row)} and{' '}
+              {landing.standing} {landing.standing === 1 ? 'is' : 'are'} there already, so{' '}
+              {landing.room} more can come in. Draw{' '}
+              {landing.arriving - landing.room} of them in fewer squares.
+            </span>
           </div>
         )}
 
@@ -711,14 +772,9 @@ export function DistractionResolution({
         <button
           className="btn primary"
           style={{ width: '100%', marginTop: 12 }}
+          disabled={overfull}
           onClick={() => {
-            dispatch({
-              type: 'resolve-distraction',
-              moves: caught.map((roll) => ({
-                animalId: roll.animalId,
-                distance: distanceFor(roll.animalId),
-              })),
-            })
+            dispatch({ type: 'resolve-distraction', moves: chosen })
             setMoves({})
           }}
         >
@@ -850,6 +906,38 @@ export function Hand({
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
 /** The picks that cannot be made on the board: directions and resource choices. */
+/**
+ * The rope's last question. It reaches six squares and pulls two, so it usually stops well
+ * short of the animal at the other end: whether those two squares are spent across the
+ * river or along it changes where the animal actually ends up, and that is the player's call
+ * rather than something the engine should decide quietly.
+ */
+function RopeAxisPicks({
+  animalId,
+  towardAnimalId,
+  dispatch,
+  setTargeting,
+}: {
+  animalId: string
+  towardAnimalId: string
+  dispatch: (action: GameAction) => boolean
+  setTargeting: (targeting: Targeting) => void
+}) {
+  const pull = (axis: RopeAxis) => {
+    if (dispatch({ type: 'use-rope', animalId, towardAnimalId, axis })) setTargeting(null)
+  }
+  return (
+    <div className="row wrap" style={{ marginTop: 8 }}>
+      <button className="btn tiny primary" onClick={() => pull('across')}>
+        Across the river first
+      </button>
+      <button className="btn tiny" onClick={() => pull('along')}>
+        Up or down it first
+      </button>
+    </div>
+  )
+}
+
 function DirectionAndResourcePicks({
   targeting,
   setTargeting,

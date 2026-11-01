@@ -189,8 +189,9 @@ function HowToPlay({ rules }: { rules: GameRules }) {
       <div className="section-title">Factions</div>
       <ul className="rules-list">
         <li>
-          <b>Ducks</b> ({rules.factions.ducks.startingAnimals} animals) ride the current{' '}
-          {rules.factions.ducks.goWithTheFlowBonus} extra square when it moves them.
+          <b>Ducks</b> ({rules.factions.ducks.startingAnimals} animals) move one animal{' '}
+          {rules.factions.ducks.oneAnimalBonus} extra square every turn. Whichever animal
+          spends it first is the one that keeps it for the rest of the game.
         </li>
         <li>
           <b>Swans</b> ({rules.factions.swans.startingAnimals}) take{' '}
@@ -305,7 +306,10 @@ function ResolutionOrder({ rules }: { rules: GameRules }) {
           {rules.dam.calmAxis === 'vertical' ? 'above and below' : 'to the left and right of'}{' '}
           them, within {rules.dam.calmRadius} square and on their own square, unless the owner
           has barred that animal this round. Those squares read 0 on the board until the dam
-          is destroyed.
+          is destroyed{rules.dam.burstCurrent > 0
+            ? `, and then run at ${rules.dam.burstCurrent} instead, because the water it was `
+              + 'holding back has to go somewhere.'
+            : '.'}
         </li>
         <li>An <b>Anchor</b>, then a <b>Current Shield</b>. Either makes the animal immune.</li>
         <li>Swan resistance, which never takes the strength below zero.</li>
@@ -315,10 +319,14 @@ function ResolutionOrder({ rules }: { rules: GameRules }) {
           starting bank; and a sideways one can carry it over the side of the board, where it
           is lost for good.
         </li>
-        <li>
-          Ducks then ride <b>one extra square</b>, but only if the current actually moved them,
-          so the ability cannot trigger off a strength of zero or loop.
-        </li>
+        {rules.factions.ducks.goWithTheFlowBonus > 0 && (
+          <li>
+            Go With the Flow, an extra ride in the current&apos;s direction, but only if the
+            current actually moved the animal, so it cannot trigger off a strength of zero or
+            loop. Switched off by default: it is the mirror image of Swan resistance, and one
+            of the pair was always going to be strictly better than the other.
+          </li>
+        )}
         <li>
           Finally a whirlpool, at most{' '}
           {rules.whirlpool.maxEffectsPerAnimalPerPhase} per animal per phase. A Whirlpool card

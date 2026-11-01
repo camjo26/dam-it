@@ -7,11 +7,12 @@
 // not, and a sequence of actions replayed against the same seed gives the same game.
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-import { bottomBankRow, tileAt } from './board'
+import { bottomBankRow, isRiverRow, tileAt } from './board'
 import { applyCardEffect, cardById, cardPlayableNow, type CardTarget } from './cards'
-import { clearRoundEffects, resolveCurrentPhase } from './current'
+import { clearRoundEffects, damCalms, resolveCurrentPhase } from './current'
 import { addLog } from './log'
 import {
+  animalsOnTile,
   coord,
   isFinished,
   isInPlay,
@@ -40,15 +41,20 @@ import type {
   EquipmentId,
   FactionId,
   GameState,
+  PendingDistraction,
   Player,
   ResourceBag,
   ResourceId,
+  TradeOutcome,
   TradeProposal,
   TradeTerms,
 } from './types'
 import { CURRENT_VECTORS, RESOURCE_IDS, RESOURCE_LABELS } from './types'
 
 const MAX_UNDO_DEPTH = 40
+
+/** The two ways a rope can set off toward the animal at the other end of it. */
+export type RopeAxis = 'across' | 'along'
 
 export type GameAction =
   | { type: 'place-collector'; playerId: string; area: ResourceId }
@@ -57,7 +63,14 @@ export type GameAction =
   | { type: 'buy-equipment'; item: EquipmentId }
   | { type: 'place-dam'; col: number; row: number }
   | { type: 'use-raft'; animalId: string }
-  | { type: 'use-rope'; animalId: string; towardAnimalId: string; distance?: number }
+  | {
+      type: 'use-rope'
+      animalId: string
+      towardAnimalId: string
+      distance?: number
+      /** Which way to set off when the other animal is neither straight across nor ahead. */
+      axis?: RopeAxis
+    }
   | { type: 'use-anchor'; animalId: string }
   | { type: 'destroy-dam'; damId: string }
   | { type: 'set-dam-exclusion'; damId: string; animalId: string }
@@ -76,6 +89,7 @@ export type GameAction =
   | { type: 'answer-trade' }
   | { type: 'settle-trade'; accept: boolean }
   | { type: 'withdraw-trade' }
+  | { type: 'dismiss-trade-outcome' }
   | { type: 'end-turn' }
   | { type: 'resolve-current' }
   | { type: 'undo' }
@@ -184,14 +198,33 @@ function startTurn(state: GameState): void {
   const faction = state.rules.factions[player.factionId]
   player.movementRemaining = faction.movementPoints
   player.actionsRemaining = faction.actionsPerTurn
+
+  // The faction's extra square, for one animal and the same one every round. A nomination
+  // lapses if that animal has crossed or been swept away, because otherwise the faction
+  // would go on paying for a duck that is no longer on the board.
+  const named = state.animals.find((a) => a.id === player.bonusAnimalId)
+  if (player.bonusAnimalId !== null && (!named || !isInPlay(named))) {
+    player.bonusAnimalId = null
+  }
+  player.bonusAnimalMoveRemaining = faction.oneAnimalBonus
   clearUndo(state)
+
+  const extras: string[] = []
+  if (faction.oneAnimalBonus > 0) {
+    const where = named && isInPlay(named) ? ` at ${coord(named.col, named.row)}` : ''
+    extras.push(
+      player.bonusAnimalId === null
+        ? `Plus ${faction.oneAnimalBonus} extra for one animal, whichever one uses it first.`
+        : `Plus ${faction.oneAnimalBonus} extra for their one animal${where}.`,
+    )
+  }
 
   addLog(state, {
     kind: 'turn-start',
     playerId: player.id,
-    message: `${player.name}'s turn.`,
+    message: `${possessive(player.name)} turn.`,
     detail: `${player.movementRemaining} movement, ${player.actionsRemaining} ` +
-      `${player.actionsRemaining === 1 ? 'action' : 'actions'}.`,
+      `${player.actionsRemaining === 1 ? 'action' : 'actions'}. ${extras.join(' ')}`.trim(),
   })
 }
 
@@ -200,6 +233,7 @@ function endTurnInternal(state: GameState): void {
   if (player) {
     player.movementRemaining = 0
     player.actionsRemaining = 0
+    player.bonusAnimalMoveRemaining = 0
     for (const animal of state.animals) {
       if (animal.playerId !== player.id) continue
       animal.bonusMovement = 0
@@ -382,6 +416,30 @@ function handleDestroyDam(state: GameState, damId: string): ActionResult {
     message: `${player.name} destroyed the dam at ${coord(dam.col, dam.row)}.`,
   })
 
+  // The water the dam was holding back bursts along the line it was holding it on. Every
+  // square the dam calmed, its own included, comes up to the burst strength, so the safest
+  // line on the board turns into the worst of it. A square that was still water before the
+  // dam went up keeps the direction the river as a whole runs, since it never rolled one.
+  const burst = state.rules.dam.burstCurrent
+  const raised = burst <= 0 ? [] : state.board.tiles.filter(
+    (t) => t.kind === 'river' && t.current < burst && damCalms(state.rules, dam, t.col, t.row),
+  )
+  for (const tile of raised) {
+    tile.current = burst
+    // Water this loud is not something anybody should have to walk onto to find out about.
+    tile.revealed = true
+  }
+  if (raised.length > 0) {
+    addLog(state, {
+      kind: 'dam-burst',
+      playerId: player.id,
+      message: `The river burst through ${coord(dam.col, dam.row)} and now runs at ${burst}.`,
+      detail: `${raised.map((t) => coord(t.col, t.row)).join(', ')} ` +
+        `${raised.length === 1 ? 'was calm and is' : 'were calm and are'} now current ` +
+        `${burst}, until something changes it.`,
+    })
+  }
+
   // Everything immediately downstream of the dam is swept along by the released water.
   // Downstream is whichever way that tile's own current runs, now that each tile has one.
   const sweep = state.rules.dam.sweepDistance
@@ -446,6 +504,7 @@ function handleUseRope(
   animalId: string,
   towardAnimalId: string,
   distance?: number,
+  axis?: RopeAxis,
 ): ActionResult {
   const player = requireTurn(state)
   if (typeof player === 'string') return fail(player)
@@ -479,14 +538,20 @@ function handleUseRope(
   const before = coord(animal.col, animal.row)
   let moved = 0
 
-  // Step toward the other animal, closing the larger gap first so the path looks natural.
+  // Step toward the other animal. The two squares need not be spent on the same axis, and
+  // with the animal six squares away they rarely land on it, so the player says which way
+  // to set off: across the river or along it. Without a preference the larger gap closes
+  // first, which is the straightest line to walk.
   for (let i = 0; i < steps; i += 1) {
     const dCol = anchorAnimal.col - animal.col
     const dRow = anchorAnimal.row - animal.row
     if (dCol === 0 && dRow === 0) break
+    const across = axis ? axis === 'across' : Math.abs(dCol) >= Math.abs(dRow)
     let dc = 0
     let dr = 0
-    if (Math.abs(dCol) >= Math.abs(dRow)) dc = Math.sign(dCol)
+    if (across && dCol !== 0) dc = Math.sign(dCol)
+    else if (!across && dRow !== 0) dr = Math.sign(dRow)
+    else if (dCol !== 0) dc = Math.sign(dCol)
     else dr = Math.sign(dRow)
     const result = slideAnimal(state, animal, dc, dr, 1)
     if (result.moved === 0) break
@@ -682,6 +747,52 @@ export function orthogonalDistance(
   return Math.abs(a.col - b.col) + Math.abs(a.row - b.row)
 }
 
+export interface DistractionLanding {
+  /** Animals standing on the token's square already. */
+  standing: number
+  /** Animals these drags would bring onto it. */
+  arriving: number
+  /** How many more the square has space for. */
+  room: number
+}
+
+/**
+ * What a set of drags would do to the token's own square.
+ *
+ * A Distraction pulls everything toward one square and the square limit binds a drag like any
+ * other deliberate move, so this is worth knowing before the drags are committed rather than
+ * afterwards, when the last few animals have quietly stopped a square short.
+ *
+ * It is room left rather than a headcount, because the river does not obey the limit: a
+ * current carries every animal standing on a tile, so a square can already hold five. That
+ * is nobody's fault and must not make a drag that adds nothing to it illegal.
+ */
+export function distractionLanding(
+  state: GameState,
+  pending: PendingDistraction,
+  moves: Array<{ animalId: string; distance: number }>,
+): DistractionLanding {
+  const target = { col: pending.col, row: pending.row }
+  const maxDistance = state.rules.distraction.pullDistance
+  const cap = state.rules.board.maxAnimalsPerTile
+  const standing = animalsOnTile(state, target.col, target.row)
+
+  let arriving = 0
+  for (const move of moves) {
+    const entry = pending.rolls.find((r) => r.animalId === move.animalId)
+    if (!entry || !entry.distracted) continue
+    const animal = state.animals.find((a) => a.id === move.animalId)
+    if (!animal || !isInPlay(animal)) continue
+    const gap = orthogonalDistance(animal, target)
+    // A gap of nothing means it is standing there already, where `standing` counts it.
+    if (gap > 0 && gap <= Math.min(move.distance, maxDistance)) arriving += 1
+  }
+
+  const limited = cap > 0 && isRiverRow(state.board, target.row)
+  const room = limited ? Math.max(0, cap - standing) : Number.MAX_SAFE_INTEGER
+  return { standing, arriving, room }
+}
+
 /** The roll this animal needs to shrug off a distraction. Ducks need more than everyone. */
 export function distractionTarget(rules: GameRules, factionId: FactionId): number {
   const d = rules.distraction
@@ -767,6 +878,23 @@ function handleResolveDistraction(
   const maxDistance = state.rules.distraction.pullDistance
   const target = { col: pending.col, row: pending.row }
 
+  // Only so many animals fit on a square, and a Distraction drags everything toward one.
+  // The whole set of drags is refused rather than quietly stopping the last few short, so
+  // the player decides for themselves which animals come all the way in.
+  const landing = distractionLanding(state, pending, moves)
+  if (landing.arriving > landing.room) {
+    const where = coord(target.col, target.row)
+    const cap = state.rules.board.maxAnimalsPerTile
+    return fail(
+      landing.room === 0
+        ? `${where} already holds ${landing.standing} animals and only ${cap} fit, so ` +
+          `there is no room on it at all. Draw them in fewer squares so they stop short.`
+        : `Only ${cap} animals fit on ${where} and ${landing.standing} ` +
+          `${landing.standing === 1 ? 'is' : 'are'} there already, so ${landing.room} more ` +
+          `can come in. Draw ${landing.arriving - landing.room} of them in fewer squares.`,
+    )
+  }
+
   for (const move of moves) {
     const entry = pending.rolls.find((r) => r.animalId === move.animalId)
     if (!entry || !entry.distracted) continue
@@ -842,6 +970,7 @@ function handleProposeTrade(
   if (typeof player === 'string') return fail(player)
   if (!state.rules.trade.enabled) return fail('Trading is switched off in the current rules.')
   if (state.pendingTrade) return fail('There is already a trade on the table.')
+  state.tradeOutcome = null
   if (tradesLeft(state, player) <= 0) {
     return fail(`Only ${state.rules.trade.proposalsPerTurn} trade may be proposed a turn.`)
   }
@@ -876,26 +1005,45 @@ function handleProposeTrade(
       `${describeTerms({ resources: request.resources, cardInstanceIds: [] },
         request.cardCount)}.`,
   })
+
+  // No thinking time for a computer opponent: it has everything it needs the moment the
+  // offer lands, so a pause before the answer would only be theatre.
+  if (other.controller === 'ai') {
+    const error = answerPendingTrade(state)
+    if (error) return fail(error)
+  }
   return { ok: true, state }
 }
 
-/** The other player's answer: take it, leave it, or name terms of their own. */
-function handleAnswerTrade(state: GameState): ActionResult {
+/**
+ * The other player's answer: take it, leave it, or name terms of their own.
+ *
+ * Returns an error message, or null once the trade has been answered. A computer opponent
+ * answers inside the same action that proposed the deal, so the offer and the reply arrive
+ * together rather than the proposer watching an empty table for a moment.
+ */
+function answerPendingTrade(state: GameState): string | null {
   const proposal = state.pendingTrade
-  if (!proposal) return fail('There is no trade waiting for an answer.')
-  if (proposal.status !== 'awaiting-reply') return fail('That trade has already been answered.')
+  if (!proposal) return 'There is no trade waiting for an answer.'
+  if (proposal.status !== 'awaiting-reply') return 'That trade has already been answered.'
 
   const from = state.players.find((p) => p.id === proposal.fromPlayerId)
   const to = state.players.find((p) => p.id === proposal.toPlayerId)
-  if (!from || !to) return fail('Unknown player.')
+  if (!from || !to) return 'Unknown player.'
 
   const verdict = judgeTrade(state, proposal)
+  // The answer is reported in a popup to whoever is sitting at the keyboard, and only to
+  // them: two computer players haggling is the log's business, not an interruption.
+  const tell = (outcome: TradeOutcome) => {
+    state.tradeOutcome = from.controller === 'human' ? outcome : null
+  }
 
   if (verdict.answer === 'accept') {
-    settleTrade(from, to, proposal.offer, {
+    const given: TradeTerms = {
       resources: proposal.request.resources,
       cardInstanceIds: to.hand.slice(0, proposal.request.cardCount).map((c) => c.instanceId),
-    })
+    }
+    settleTrade(from, to, proposal.offer, given)
     state.pendingTrade = null
     addLog(state, {
       kind: 'trade-accepted',
@@ -903,8 +1051,16 @@ function handleAnswerTrade(state: GameState): ActionResult {
       message: `${to.name} accepted ${possessive(from.name)} trade.`,
       detail: verdict.reply,
     })
+    tell({
+      status: 'accepted',
+      fromPlayerId: from.id,
+      toPlayerId: to.id,
+      headline: `${to.name} took the deal.`,
+      detail: verdict.reply,
+      terms: `You gave ${describeTerms(proposal.offer)} and got ${describeTerms(given)}.`,
+    })
     clearUndo(state)
-    return { ok: true, state }
+    return null
   }
 
   if (verdict.answer === 'counter' && verdict.counter) {
@@ -917,7 +1073,16 @@ function handleAnswerTrade(state: GameState): ActionResult {
       message: `${to.name} countered ${possessive(from.name)} offer.`,
       detail: verdict.reply,
     })
-    return { ok: true, state }
+    tell({
+      status: 'countered',
+      fromPlayerId: from.id,
+      toPlayerId: to.id,
+      headline: `${to.name} want a different deal.`,
+      detail: verdict.reply,
+      terms: `They will give ${describeTerms(verdict.counter)} for your ` +
+        `${describeTerms(proposal.offer)}.`,
+    })
+    return null
   }
 
   state.pendingTrade = null
@@ -927,7 +1092,22 @@ function handleAnswerTrade(state: GameState): ActionResult {
     message: `${to.name} turned ${possessive(from.name)} trade down.`,
     detail: verdict.reply,
   })
-  return { ok: true, state }
+  tell({
+    status: 'declined',
+    fromPlayerId: from.id,
+    toPlayerId: to.id,
+    headline: `That is a no from ${to.name}.`,
+    detail: verdict.reply,
+    terms: `You offered ${describeTerms(proposal.offer)} for ` +
+      `${describeTerms({ resources: proposal.request.resources, cardInstanceIds: [] },
+        proposal.request.cardCount)}.`,
+  })
+  return null
+}
+
+function handleAnswerTrade(state: GameState): ActionResult {
+  const error = answerPendingTrade(state)
+  return error ? fail(error) : { ok: true, state }
 }
 
 /** The proposer's last word on a counter-offer. */
@@ -942,6 +1122,7 @@ function handleSettleTrade(state: GameState, accept: boolean): ActionResult {
 
   if (!accept) {
     state.pendingTrade = null
+    state.tradeOutcome = null
     addLog(state, {
       kind: 'trade-declined',
       playerId: from.id,
@@ -958,6 +1139,7 @@ function handleSettleTrade(state: GameState, accept: boolean): ActionResult {
 
   settleTrade(from, to, proposal.offer, proposal.counter)
   state.pendingTrade = null
+  state.tradeOutcome = null
   addLog(state, {
     kind: 'trade-accepted',
     playerId: from.id,
@@ -972,6 +1154,7 @@ function handleWithdrawTrade(state: GameState): ActionResult {
   if (!state.pendingTrade) return fail('There is no trade to withdraw.')
   const from = state.players.find((p) => p.id === state.pendingTrade?.fromPlayerId)
   state.pendingTrade = null
+  state.tradeOutcome = null
   addLog(state, {
     kind: 'trade-withdrawn',
     playerId: from?.id ?? null,
@@ -1154,7 +1337,9 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
 
   // Likewise a trade: it has to be answered before the turn carries on, so nobody can spend
   // the resources they have just offered somebody else.
-  const TRADE_ACTIONS = new Set(['answer-trade', 'settle-trade', 'withdraw-trade'])
+  const TRADE_ACTIONS = new Set([
+    'answer-trade', 'settle-trade', 'withdraw-trade', 'dismiss-trade-outcome',
+  ])
   if (state.pendingTrade && !TRADE_ACTIONS.has(action.type)) {
     return fail('There is a trade on the table. Settle it before doing anything else.')
   }
@@ -1178,7 +1363,8 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
     case 'use-raft':
       return handleUseRaft(draft, action.animalId)
     case 'use-rope':
-      return handleUseRope(draft, action.animalId, action.towardAnimalId, action.distance)
+      return handleUseRope(draft, action.animalId, action.towardAnimalId, action.distance,
+        action.axis)
     case 'use-anchor':
       return handleUseAnchor(draft, action.animalId)
     case 'destroy-dam':
@@ -1205,6 +1391,9 @@ export function applyAction(state: GameState, action: GameAction): ActionResult 
       return handleSettleTrade(draft, action.accept)
     case 'withdraw-trade':
       return handleWithdrawTrade(draft)
+    case 'dismiss-trade-outcome':
+      draft.tradeOutcome = null
+      return { ok: true, state: draft }
     case 'end-turn': {
       const player = requireTurn(draft)
       if (typeof player === 'string') return fail(player)

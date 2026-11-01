@@ -162,9 +162,9 @@ describe('ranges counted in straight lines', () => {
     const state = startPlayerTurns(makeGame())
     playerOf(state, 'ducks').equipment.rope = 1
     const mine = animalsOf(state, 'ducks')
-    // Two across and two down is four steps, past a rope range of 3.
-    put(state, state.animals.find((a) => a.id === mine[0].id)!, 4, 2)
-    put(state, state.animals.find((a) => a.id === mine[1].id)!, 6, 4)
+    // Three across and four down is seven steps, one past a rope range of 6.
+    put(state, state.animals.find((a) => a.id === mine[0].id)!, 1, 2)
+    put(state, state.animals.find((a) => a.id === mine[1].id)!, 4, 6)
 
     const error = expectRejected(state, {
       type: 'use-rope', animalId: mine[1].id, towardAnimalId: mine[0].id,

@@ -56,8 +56,17 @@ export interface FactionRules {
   startingAnimals: number
   movementPoints: number
   actionsPerTurn: number
-  /** Ducks: extra spaces moved in the current's direction after the current moves them. */
+  /** Extra spaces moved in the current's direction after the current moves them. */
   goWithTheFlowBonus: number
+  /**
+   * Ducks: extra squares for one animal of theirs, and the same animal all game.
+   *
+   * Deliberately not the mirror of the Swans' resistance, which it used to be: one faction
+   * taking a square off the current while another adds one to it makes the stronger of the
+   * two strictly better. An extra square that is always there, for one animal, is a
+   * different kind of advantage rather than a bigger helping of the same one.
+   */
+  oneAnimalBonus: number
   /** Swans: spaces subtracted from the current's effective strength. */
   currentResistance: number
   /** Beavers: resources removed from the cost of anything they build. */
@@ -183,6 +192,12 @@ export interface GameRules {
     destroyUsesAction: boolean
     /** Animals immediately downstream of a destroyed dam are swept this many spaces. */
     sweepDistance: number
+    /**
+     * Strength every square the dam was calming comes up to once it is destroyed. The water
+     * it held back has to go somewhere, so the safest line on the board becomes the worst
+     * of it. Zero lets the squares simply return to the strength they were rolled at.
+     */
+    burstCurrent: number
     /** The owner may bar one animal per round from the dam's calming effect. */
     exclusionsPerRound: number
   }
@@ -240,6 +255,18 @@ const DEFAULT_DEPTH = 7
 const DEFAULT_VISIBLE_CURRENTS = 5
 const SIDEWAYS_ONLY_FROM = 4
 const MAX_ANIMALS_PER_TILE = 4
+
+// A destroyed dam does not just stop calming the water: the river bursts through the line it
+// was holding, and everything it had made safe runs this hard instead.
+const DAM_BURST_CURRENT = 3
+
+// A rope reaches most of the way across a ten-wide board, so an animal stranded on bad water
+// is never beyond help from the rest of the group - it just takes two squares to get there.
+const ROPE_RANGE = 6
+const ROPE_DISTANCE = 2
+
+// One duck, the same one all game, walks an extra square.
+const DUCK_EXTRA_MOVE = 1
 
 function bag(wood = 0, stone = 0, clay = 0, reeds = 0): ResourceBag {
   return { wood, stone, clay, reeds }
@@ -534,7 +561,8 @@ export const DEFAULT_RULES: GameRules = {
       startingAnimals: 10,
       movementPoints: 3,
       actionsPerTurn: 1,
-      goWithTheFlowBonus: 1,
+      goWithTheFlowBonus: 0,
+      oneAnimalBonus: DUCK_EXTRA_MOVE,
       currentResistance: 0,
       buildDiscount: 0,
       forbiddenEquipment: [],
@@ -547,6 +575,7 @@ export const DEFAULT_RULES: GameRules = {
       movementPoints: 3,
       actionsPerTurn: 1,
       goWithTheFlowBonus: 0,
+      oneAnimalBonus: 0,
       currentResistance: 1,
       buildDiscount: 0,
       forbiddenEquipment: [],
@@ -559,6 +588,7 @@ export const DEFAULT_RULES: GameRules = {
       movementPoints: 3,
       actionsPerTurn: 2,
       goWithTheFlowBonus: 0,
+      oneAnimalBonus: 0,
       currentResistance: 0,
       buildDiscount: 0,
       forbiddenEquipment: ['anchor', 'rope'],
@@ -571,6 +601,7 @@ export const DEFAULT_RULES: GameRules = {
       movementPoints: 3,
       actionsPerTurn: 1,
       goWithTheFlowBonus: 0,
+      oneAnimalBonus: 0,
       currentResistance: 0,
       buildDiscount: 1,
       forbiddenEquipment: [],
@@ -611,13 +642,13 @@ export const DEFAULT_RULES: GameRules = {
       enabled: true,
     },
     raft: {
-      cost: bag(2, 0, 0, 1),
+      cost: bag(1, 1, 1, 1),
       purchaseUsesAction: true,
       useUsesAction: false,
       enabled: true,
     },
     rope: {
-      cost: bag(2, 0, 0, 2),
+      cost: bag(1, 0, 1, 2),
       purchaseUsesAction: true,
       useUsesAction: false,
       enabled: true,
@@ -631,8 +662,8 @@ export const DEFAULT_RULES: GameRules = {
   },
   equipmentEffects: {
     raftDistance: 1,
-    ropeRange: 3,
-    ropeDistance: 2,
+    ropeRange: ROPE_RANGE,
+    ropeDistance: ROPE_DISTANCE,
     anchorRounds: 1,
   },
   dam: {
@@ -642,6 +673,7 @@ export const DEFAULT_RULES: GameRules = {
     destroyCost: bag(0, 2, 0, 0),
     destroyUsesAction: true,
     sweepDistance: 2,
+    burstCurrent: DAM_BURST_CURRENT,
     exclusionsPerRound: 1,
   },
   powerCards: {

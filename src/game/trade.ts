@@ -153,7 +153,9 @@ export function judgeTrade(state: GameState, proposal: TradeProposal): TradeVerd
   }
 
   if (gain >= cost * margin) {
-    return { answer: 'accept', reply: `${them.name} likes the look of that.` }
+    // Plural verbs throughout: every faction name is a plural, and these replies are read
+    // in a popup now rather than skimmed in the log.
+    return { answer: 'accept', reply: `${them.name} like the look of that.` }
   }
 
   // Not good enough as it stands, so try to find terms they would take: hand over less of
@@ -196,14 +198,15 @@ export function judgeTrade(state: GameState, proposal: TradeProposal): TradeVerd
   if (!offersAnything) {
     return {
       answer: 'decline',
-      reply: `${them.name} does not think that is worth it, and has nothing to suggest.`,
+      reply: `${them.name} do not think that is worth it, and have nothing to suggest.`,
     }
   }
 
   return {
     answer: 'counter',
     counter,
-    reply: `${them.name} will not go that far, but offers ${describeTerms(counter)} instead.`,
+    reply: `${them.name} will not go that far, but offer ${describeTerms(counter)} ` +
+      'instead.',
   }
 }
 

@@ -257,7 +257,7 @@ export function SetupScreen({
 function describeAbility(id: FactionId): string {
   switch (id) {
     case 'ducks':
-      return 'Go With the Flow: ride the current one extra square.'
+      return 'One animal of theirs moves an extra square, every turn, all game.'
     case 'swans':
       return 'The current affects them one less.'
     case 'frogs':

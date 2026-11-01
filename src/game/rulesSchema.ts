@@ -374,6 +374,16 @@ export const RULE_SECTIONS: RuleSection[] = [
         max: 6,
       },
       {
+        path: 'dam.burstCurrent',
+        label: 'Strength the calmed squares run at once it is destroyed',
+        type: 'number',
+        status: 'provisional',
+        min: 0,
+        max: 4,
+        note: 'Asked for directly: the water the dam held back bursts through the line it ' +
+          'was holding. Zero lets those squares go back to the strength they were rolled at.',
+      },
+      {
         path: 'dam.exclusionsPerRound',
         label: 'Animals the owner may bar per round',
         type: 'number',
@@ -635,10 +645,22 @@ export const FACTION_FIELDS: RuleField[] = [
     path: 'goWithTheFlowBonus',
     label: 'Go With the Flow: extra squares',
     type: 'number',
-    status: 'established',
+    status: 'provisional',
     min: 0,
     max: 4,
-    note: 'Ducks only by default. Applied once, after the current has moved the animal.',
+    note: 'Off everywhere by default. It was the Ducks\u2019 ability and is the mirror of ' +
+      'Swan resistance, which made one of the two strictly better than the other. Applied ' +
+      'once, after the current has moved the animal.',
+  },
+  {
+    path: 'oneAnimalBonus',
+    label: 'Extra squares for one animal',
+    type: 'number',
+    status: 'provisional',
+    min: 0,
+    max: 4,
+    note: 'Ducks only by default. Spent last of all, on one animal, and the animal that ' +
+      'spends it first keeps it for the rest of the game.',
   },
   {
     path: 'currentResistance',

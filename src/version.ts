@@ -1,4 +1,4 @@
-export const VERSION = '0.06'
+export const VERSION = '0.07'
 
 export interface ChangelogEntry {
   version: string
@@ -8,6 +8,26 @@ export interface ChangelogEntry {
 
 // Newest first.
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.07',
+    date: '2026-11-01',
+    notes: [
+      'Destroying a dam now bursts the line it was holding: every square it was calming '
+        + 'runs at current 3 from then on, face up, instead of going back to what it was.',
+      'A computer opponent answers a trade the moment you make it, and the answer comes up '
+        + 'in a popup: taken, turned down, or a counter-offer with Take it and Leave it on it.',
+      'The rope reaches 6 squares rather than 3, still pulls 2, and you choose whether those '
+        + 'two are spent across the river or along it. It costs 1 Wood, 1 Clay, 2 Reeds.',
+      'The raft costs 1 of everything. The dam and the anchor are unchanged.',
+      'New Duck ability: one of their animals moves an extra square every turn, and whichever '
+        + 'animal spends it first keeps it for the rest of the game. Go With the Flow is off, '
+        + 'because it was the mirror of Swan resistance and one of the two had to be better.',
+      'A Distraction drag cannot put more than 4 animals on the token square. It says so '
+        + 'before you commit, and refuses the whole set rather than quietly stopping one short.',
+      'Worth knowing: the new Duck ability wins 31.5% of simulated games against the old '
+        + 'ability\u2019s 24%, so it may want trimming.',
+    ],
+  },
   {
     version: '0.06',
     date: '2026-10-31',

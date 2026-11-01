@@ -20,7 +20,7 @@ import {
   totalResources,
   type GameAction,
 } from './engine'
-import { isInPlay, legalDestinations } from './movement'
+import { animalsOnTile, isInPlay, legalDestinations } from './movement'
 import { deriveFloat } from './rng'
 import { missionById } from './missions'
 import { collectorsLeft } from './production'
@@ -446,18 +446,39 @@ export function chooseAiAction(state: GameState, playerId: string): GameAction |
 
   // A token it played is resolved before anything else: opponents are dragged as far as the
   // rules allow, and its own animals are left exactly where they are.
+  //
+  // Only four animals fit on the token's square, though, and a drag that would overfill it
+  // is refused outright, so the full pull is spent on the opponents worth dragging back -
+  // the ones nearest the far bank - and everyone after that is drawn up one square short.
   const pending = state.pendingDistraction
   if (pending) {
     if (pending.placerId !== playerId) return null
     const pull = state.rules.distraction.pullDistance
+    const target = { col: pending.col, row: pending.row }
+    const cap = state.rules.board.maxAnimalsPerTile
+    let room = cap <= 0
+      ? Number.MAX_SAFE_INTEGER
+      : Math.max(0, cap - animalsOnTile(state, target.col, target.row))
+
+    const caught = pending.rolls
+      .filter((roll) => roll.distracted)
+      .map((roll) => ({ roll, animal: state.animals.find((a) => a.id === roll.animalId) }))
+      .sort((a, b) => (b.animal?.row ?? 0) - (a.animal?.row ?? 0))
+
     return {
       type: 'resolve-distraction',
-      moves: pending.rolls
-        .filter((roll) => roll.distracted)
-        .map((roll) => ({
-          animalId: roll.animalId,
-          distance: roll.playerId === playerId ? 0 : pull,
-        })),
+      moves: caught.map(({ roll, animal }) => {
+        const id = roll.animalId
+        if (roll.playerId === playerId || !animal) return { animalId: id, distance: 0 }
+        const gap = orthogonalDistance(animal, target)
+        // Too far away to reach the token at all, so it costs none of the room on it.
+        if (gap > pull) return { animalId: id, distance: pull }
+        if (room > 0) {
+          room -= 1
+          return { animalId: id, distance: pull }
+        }
+        return { animalId: id, distance: Math.max(0, gap - 1) }
+      }),
     }
   }
 
