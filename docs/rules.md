@@ -39,7 +39,7 @@ Taken from the brief and from the printed components in this folder.
 
 | | Animals | Move | Ability | Weakness |
 |---|---|---|---|---|
-| Ducks | 10 | 3 | One animal of theirs moves one extra square, every turn, all game | Distraction, see below |
+| Ducks | 10 | 3 | One animal of theirs moves one extra square, every turn, all game | That animal is never out of the current, and Distraction, see below |
 | Swans | 8 | 3 | The current affects them one less | |
 | Frogs | 10 | 3 | One extra action per turn | No anchors, no ropes |
 | Beavers | 10 | 3 | Everything they build costs one resource less | |
@@ -109,6 +109,7 @@ Chosen so the game is playable. Each is deliberately simple and reversible.
 | A destroyed dam bursts | the squares it calmed run at 3 | Asked for directly: the water it was holding has to go somewhere, so the safest line on the board becomes the worst of it. Zero sends those squares back to the strength they were rolled at. | `dam.burstCurrent` |
 | Four animals to a square | yes, on river squares | Binds anything a player chooses to do, including a Distraction drag, which is refused outright rather than quietly stopping the last animal short. It does not bind the river: a current carries every animal on a tile, so a square can hold five through nobody's choice, and a drag that adds nothing to such a square is still legal. | `board.maxAnimalsPerTile` |
 | The Ducks' ability | one animal, one extra square, named by use | Go With the Flow was the mirror image of Swan resistance, so one of the two was always going to be strictly better. The extra square is spent after the shared movement, and whichever animal spends it first keeps it for the rest of the game. The knob is still there. | `factions.ducks.oneAnimalBonus` |
+| The price on it | that animal is never out of the current | An anchor and a Current Shield both slide off the animal carrying the extra square, however they got there. It makes naming that animal a decision rather than an accident. It is flavour rather than balance: see the numbers below. | `factions.ducks.bonusAnimalUnprotected` |
 | Range is orthogonal | yes | Asked for directly: three squares means three steps along the rows and columns, so a diagonal corner is further than it looks. Distraction tokens, ropes and Rescue all use it. | n/a |
 | Trading | on, free, one offer a turn | Offer resources and Power Cards, and say what you want back. Cards are asked for by number, not name, because a hand is secret. The other player takes it, leaves it, or names their own terms. A computer opponent answers inside the same action, and the answer is reported in a popup rather than only in the log. | `trade.*` |
 | Current resolution order | downstream first | Any order works as long as it is fixed and visible. Ties always break by turn order then animal id. | `current.resolutionOrder` |
@@ -156,23 +157,48 @@ all of them are listed in the app under **How to play > Open questions**.
 
 ## What the numbers say
 
-From `pnpm sim -- --games 200`, v0.07 rules, Normal opponents, none failed. Raw data in
-`docs/balance/v0.07.csv`, with the runs before it in `v0.05.csv`, `v0.04.csv`, `v0.03.csv` and
-`baseline.csv`.
+From `pnpm sim -- --games 200`, v0.08 rules, Normal opponents, none failed. Raw data in
+`docs/balance/v0.08-price-on.csv` and `v0.08-price-off.csv`, with the runs before them in
+`v0.07.csv`, `v0.05.csv`, `v0.04.csv`, `v0.03.csv` and `baseline.csv`.
 
 | Faction | Win % | Score | Animals across | Mission % | Built | Carried by the current |
 |---|---|---|---|---|---|---|
-| Ducks | 31.5 | 5.06 | 3.42 | 37 | 6.4 | 18.6 |
-| Swans | 17 | 4.29 | 3.13 | 27 | 6.4 | 6.3 |
-| Frogs | 16 | 3.76 | 2.24 | 35.5 | 4.5 | 15.1 |
-| Beavers | 20 | 4.45 | 2.96 | 34 | 7.8 | 15.6 |
+| Ducks | 32.5 | 5.08 | 3.39 | 38 | 6.4 | 18.6 |
+| Swans | 18 | 4.26 | 3.13 | 26.5 | 6.4 | 6.2 |
+| Frogs | 16 | 3.72 | 2.20 | 35.5 | 4.5 | 15.0 |
+| Beavers | 19.5 | 4.34 | 2.92 | 32.5 | 7.8 | 15.4 |
 
-**The Ducks' new ability is stronger than the one it replaced, and it is worth deciding
-whether that is wanted.** They have gone from 24% to 31.5% and now get the most animals across.
-The reason is not hard to see: Go With the Flow only paid out when the current happened to move
-them, and near an edge it was actively dangerous, while an extra square every turn pays every
-turn and carries no risk at all. If it wants trimming, the honest knobs are
-`factions.ducks.oneAnimalBonus` or the Ducks' animal count.
+**The Ducks' new ability is stronger than the one it replaced, and trimming it is not as
+simple as it looks.** They have gone from 24% to 31.5% and now get the most animals across.
+Go With the Flow only paid out when the current happened to move them, and near an edge it was
+actively dangerous; an extra square every turn pays every turn. Four ways of pricing it were
+measured over 200 games each, same seeds:
+
+| Variant | Ducks win % |
+|---|---|
+| As it stands | 31.5 |
+| The fast duck can never be anchored or shielded | 32.5 |
+| Eight starting animals instead of ten | 32.5 |
+| 2 shared movement + 1 for the fast duck (3 in total) | 21.5 |
+| No ability at all | 17.5 |
+
+Two of those do nothing at all, and for understandable reasons. **The animal count is dead
+weight**: the Ducks get 3.4 animals across out of ten, so ten never binds. **The anchor price
+cannot be measured by the simulator**: the computer opponents anchor a duck 0.43 times a game,
+and with ten ducks the odds of that anchor being the one carrying the extra square are about
+one in ten, so the rule applies roughly once every twenty games. A person, who would anchor
+the animal they care about, would feel it. It is in the build as flavour and a decision, not
+as a nerf.
+
+That leaves no gentle version: full strength is 31.5 and one notch down is 21.5, with nothing
+at 25.
+
+**The more useful thing in those numbers is the field, not the Ducks.** With the Duck ability
+switched off entirely the table reads Beavers 26, Frogs 21.5, Swans 19.5, Ducks 17.5 - an
+8.5 point spread with no Duck ability in it at all. Swan resistance has not cleared 19.5% in
+any run, and the Frogs spend their second action on Power Cards that do not pay for
+themselves. The headroom is in lifting those two rather than in cutting the one ability that
+a player can feel.
 
 **Losing animals over the side costs about half an animal a game.** Unchanged from v0.05:
 crossings sit around 3.2 and scores around 4.7. A real cost without being a bloodbath, which is

@@ -16,6 +16,7 @@ import {
   coord,
   isFinished,
   isInPlay,
+  isUnprotectedBonusAnimal,
   moveAnimalStep,
   placeAnimal,
   slideAnimal,
@@ -587,6 +588,10 @@ function handleUseAnchor(state: GameState, animalId: string): ActionResult {
   const animal = state.animals.find((a) => a.id === animalId)
   if (!animal || animal.playerId !== player.id) return fail('Choose one of your animals.')
   if (!isInPlay(animal)) return fail('That animal is no longer in play.')
+  if (isUnprotectedBonusAnimal(state, animal)) {
+    return fail(`That animal takes ${possessive(faction.name)} extra square, and that one ` +
+      'is never out of the current. Anchor a different one.')
+  }
 
   const actionError = spendAction(player, state.rules.equipment.anchor.useUsesAction)
   if (actionError) return fail(actionError)

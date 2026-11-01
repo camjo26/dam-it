@@ -20,7 +20,12 @@ import {
   totalResources,
   type GameAction,
 } from './engine'
-import { animalsOnTile, isInPlay, legalDestinations } from './movement'
+import {
+  animalsOnTile,
+  isInPlay,
+  isUnprotectedBonusAnimal,
+  legalDestinations,
+} from './movement'
 import { deriveFloat } from './rng'
 import { missionById } from './missions'
 import { collectorsLeft } from './production'
@@ -533,6 +538,8 @@ export function chooseAiAction(state: GameState, playerId: string): GameAction |
   if (player.equipment.anchor > 0) {
     const exposed = activeAnimalsOf(state, player.id).find((animal) => {
       if (animal.anchoredThroughRound !== null) return false
+      // An anchor does not stick to the animal carrying the faction's extra square.
+      if (isUnprotectedBonusAnimal(state, animal)) return false
       const tile = tileAt(state.board, animal.col, animal.row)
       return tile ? perceivedCurrent(state, tile) >= 2 : false
     })

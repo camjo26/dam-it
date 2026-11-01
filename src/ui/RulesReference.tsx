@@ -192,6 +192,10 @@ function HowToPlay({ rules }: { rules: GameRules }) {
           <b>Ducks</b> ({rules.factions.ducks.startingAnimals} animals) move one animal{' '}
           {rules.factions.ducks.oneAnimalBonus} extra square every turn. Whichever animal
           spends it first is the one that keeps it for the rest of the game.
+          {rules.factions.ducks.bonusAnimalUnprotected && (
+            <> That animal pays for it by staying out in the water: an anchor and a Current
+            Shield both slide off it.</>
+          )}
         </li>
         <li>
           <b>Swans</b> ({rules.factions.swans.startingAnimals}) take{' '}

@@ -19,7 +19,14 @@
 
 import { bottomBankRow, tileAt, TOP_BANK_ROW } from './board'
 import { addLog } from './log'
-import { coord, isFinished, isInPlay, loseAnimal, placeAnimal } from './movement'
+import {
+  coord,
+  isFinished,
+  isInPlay,
+  isUnprotectedBonusAnimal,
+  loseAnimal,
+  placeAnimal,
+} from './movement'
 import type { GameRules } from './rules'
 import { weightedIndex } from './rng'
 import type {
@@ -147,16 +154,26 @@ export function assessCurrent(state: GameState, animal: Animal): CurrentAssessme
       reasons, immune: true }
   }
 
-  // 5. Anchor and Current Shield.
+  // 5. Anchor and Current Shield, neither of which sticks to an animal that is paying for
+  //    a faction's extra square by staying out in the water.
+  const exposed = isUnprotectedBonusAnimal(state, animal)
   if (animal.anchoredThroughRound !== null && animal.anchoredThroughRound >= state.round) {
-    reasons.push('Anchored, so it ignores the current this round.')
-    return { baseStrength, effectiveStrength: 0, strengthBeforeResistance: 0, direction,
-      reasons, immune: true }
+    if (!exposed) {
+      reasons.push('Anchored, so it ignores the current this round.')
+      return { baseStrength, effectiveStrength: 0, strengthBeforeResistance: 0, direction,
+        reasons, immune: true }
+    }
+    reasons.push('Anchored, but this is the animal with the extra square, and that one is ' +
+      'never out of the current.')
   }
   if (animal.shieldedForRound === state.round) {
-    reasons.push('Current Shield, so it ignores the current this phase.')
-    return { baseStrength, effectiveStrength: 0, strengthBeforeResistance: 0, direction,
-      reasons, immune: true }
+    if (!exposed) {
+      reasons.push('Current Shield, so it ignores the current this phase.')
+      return { baseStrength, effectiveStrength: 0, strengthBeforeResistance: 0, direction,
+        reasons, immune: true }
+    }
+    reasons.push('Shielded, but this is the animal with the extra square, and that one is ' +
+      'never out of the current.')
   }
 
   // 6. Swan resistance. Noted before it is applied, because resistance only makes a push

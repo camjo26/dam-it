@@ -1,4 +1,4 @@
-export const VERSION = '0.07'
+export const VERSION = '0.08'
 
 export interface ChangelogEntry {
   version: string
@@ -8,6 +8,23 @@ export interface ChangelogEntry {
 
 // Newest first.
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.08',
+    date: '2026-11-01',
+    notes: [
+      'The animal carrying the Ducks\u2019 extra square is never out of the current: an '
+        + 'anchor and a Current Shield both slide off it. It makes naming that animal a '
+        + 'real decision rather than an accident of which duck moved last.',
+      'Switchable in the rules editor under Factions, because it is worth being able to '
+        + 'turn a price off and see what the ability is worth without one.',
+      'Measured over 200 games, and worth saying plainly: the price does not change the '
+        + 'balance. The computer opponents anchor a duck 0.43 times a game, so it almost '
+        + 'never comes up for them. It is a decision for a person at the table.',
+      'Also measured: the Ducks win 17.5% with no ability at all, 21.5% with their '
+        + 'movement concentrated instead of increased, and 32.5% with eight animals rather '
+        + 'than ten. The animal count does nothing, because they only get 3.4 across.',
+    ],
+  },
   {
     version: '0.07',
     date: '2026-11-01',

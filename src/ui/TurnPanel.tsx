@@ -15,7 +15,7 @@ import {
   totalResources,
 } from '../game/engine'
 import type { GameAction, RopeAxis } from '../game/engine'
-import { coord, describeTile, isInPlay } from '../game/movement'
+import { coord, describeTile, isInPlay, isUnprotectedBonusAnimal } from '../game/movement'
 import { collectorsLeft } from '../game/production'
 import { COLLECTOR_AREAS } from '../game/rules'
 import type { Animal, EquipmentId, GameState, Player, ResourceId } from '../game/types'
@@ -304,6 +304,7 @@ function SelectedAnimal({
 
   const assessment = assessCurrent(state, animal)
   const faction = state.rules.factions[player.factionId]
+  const neverProtected = isUnprotectedBonusAnimal(state, animal)
 
   return (
     <div style={{ marginBottom: 10 }}>
@@ -328,6 +329,13 @@ function SelectedAnimal({
         <div style={{ marginTop: 2 }}>{assessment.reasons.join(' ')}</div>
       </div>
 
+      {neverProtected && (
+        <div className="faint" style={{ marginTop: 6 }}>
+          This one carries your extra square, so it is never out of the current: no anchor,
+          no Current Shield.
+        </div>
+      )}
+
       <div className="row wrap" style={{ marginTop: 8 }}>
         {player.equipment.raft > 0 && (
           <button
@@ -340,6 +348,13 @@ function SelectedAnimal({
         {player.equipment.anchor > 0 && !faction.forbiddenEquipment.includes('anchor') && (
           <button
             className="btn small"
+            disabled={neverProtected}
+            title={
+              neverProtected
+                ? `This is the animal with ${faction.name} extra square, and that one is ` +
+                  'never out of the current. An anchor will not stick to it.'
+                : undefined
+            }
             onClick={() => dispatch({ type: 'use-anchor', animalId: animal.id })}
           >
             Drop anchor ({player.equipment.anchor})
@@ -430,6 +445,15 @@ function equipmentInfo(state: GameState, item: EquipmentId): string[] {
     lines.push(
       `The animal ignores the current entirely for ${rounds} ` +
         `${rounds === 1 ? 'round' : 'rounds'}, however strong it is.`,
+    )
+    const player = activePlayer(state)
+    if (player && rules.factions[player.factionId].bonusAnimalUnprotected) {
+      lines.push(
+        'It will not stick to the animal carrying your extra square, though: that one is ' +
+          'never out of the current.',
+      )
+    }
+    lines.push(
       'The answer to sitting on a 4 you cannot get off, or to holding a good square.',
       'Single use. Frogs cannot use anchors.',
     )

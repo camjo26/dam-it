@@ -109,6 +109,17 @@ export function isInPlay(animal: Animal): boolean {
   return animal.status !== 'finished' && animal.status !== 'lost'
 }
 
+/**
+ * True when this animal carries its faction's extra square and that faction pays for it by
+ * going unprotected. Nothing that would make it ignore the current sticks to it: it is the
+ * fast one, and the fast one is always out in the water.
+ */
+export function isUnprotectedBonusAnimal(state: GameState, animal: Animal): boolean {
+  const player = state.players.find((p) => p.id === animal.playerId)
+  if (!player || player.bonusAnimalId !== animal.id) return false
+  return state.rules.factions[player.factionId].bonusAnimalUnprotected
+}
+
 export function isMovable(animal: Animal): boolean {
   return isInPlay(animal)
 }

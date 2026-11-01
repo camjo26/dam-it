@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { animalsOnTile } from '../src/game/movement'
+import type { GameRules } from '../src/game/rules'
 import type { DistractionRoll, GameState } from '../src/game/types'
 import {
   animalsOf,
@@ -319,5 +320,56 @@ describe('a computer opponent answers a trade on the spot', () => {
 
     expect(after.tradeOutcome).toBeNull()
     expect(playerOf(after, 'ducks').resources).toMatchObject({ wood: 1, clay: 1 })
+  })
+})
+
+describe('the animal with the extra square is never out of the current', () => {
+  /** Names the Ducks' first animal by spending the shared pool and then the extra square. */
+  function nameTheFastDuck(tweak?: (rules: GameRules) => void) {
+    let state = startPlayerTurns(makeGame({ currentStrength: 2, tweak }))
+    const ducks = animalsOf(state, 'ducks')
+    stockUp(state, 'ducks')
+    state = must(state, { type: 'buy-equipment', item: 'anchor' })
+    for (let i = 0; i < 4; i += 1) state = stepForward(state, ducks[0].id)
+    expect(playerOf(state, 'ducks').bonusAnimalId).toBe(ducks[0].id)
+    return { state, ducks }
+  }
+
+  it('refuses an anchor on it', () => {
+    const { state, ducks } = nameTheFastDuck()
+    const error = expectRejected(state, { type: 'use-anchor', animalId: ducks[0].id })
+    expect(error).toMatch(/never out of the current/)
+  })
+
+  it('still lets the rest of the flock be anchored', () => {
+    const { state, ducks } = nameTheFastDuck()
+    const after = must(state, { type: 'use-anchor', animalId: ducks[1].id })
+    const settled = must(reachCurrentPhase(after), { type: 'resolve-current' })
+    expect(settled.animals.find((a) => a.id === ducks[1].id)!.col).toBe(ducks[1].col)
+  })
+
+  it('is carried by the current even when it was anchored before it was named', () => {
+    // The anchor goes on first and the animal is named afterwards, by spending the extra
+    // square. Nothing can be protecting it by the time the river runs, however it got there.
+    let state = startPlayerTurns(makeGame({ currentStrength: 2 }))
+    const ducks = animalsOf(state, 'ducks')
+    stockUp(state, 'ducks')
+    state = must(state, { type: 'buy-equipment', item: 'anchor' })
+    state = must(state, { type: 'use-anchor', animalId: ducks[0].id })
+    for (let i = 0; i < 4; i += 1) state = stepForward(state, ducks[0].id)
+
+    const before = state.animals.find((a) => a.id === ducks[0].id)!.col
+    state = must(reachCurrentPhase(state), { type: 'resolve-current' })
+    expect(state.animals.find((a) => a.id === ducks[0].id)!.col).toBe(before + 2)
+  })
+
+  it('takes the anchor again with the price switched off', () => {
+    const { state, ducks } = nameTheFastDuck((rules) => {
+      rules.factions.ducks.bonusAnimalUnprotected = false
+    })
+    const after = must(state, { type: 'use-anchor', animalId: ducks[0].id })
+    const settled = must(reachCurrentPhase(after), { type: 'resolve-current' })
+    const held = settled.animals.find((a) => a.id === ducks[0].id)!
+    expect(held.col).toBe(after.animals.find((a) => a.id === ducks[0].id)!.col)
   })
 })

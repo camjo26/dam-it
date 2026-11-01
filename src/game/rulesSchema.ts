@@ -663,6 +663,15 @@ export const FACTION_FIELDS: RuleField[] = [
       'spends it first keeps it for the rest of the game.',
   },
   {
+    path: 'bonusAnimalUnprotected',
+    label: 'That animal is never out of the current',
+    type: 'boolean',
+    status: 'provisional',
+    note: 'The price of the extra square: an anchor or a Current Shield will not stick to ' +
+      'the animal carrying it. Turn this off to see what the ability is worth without a ' +
+      'price on it.',
+  },
+  {
     path: 'currentResistance',
     label: 'Current resistance',
     type: 'number',

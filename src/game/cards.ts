@@ -8,7 +8,14 @@
 
 import { orthogonalNeighbours } from './board'
 import { addLog } from './log'
-import { coord, isInPlay, placeAnimal, slideAnimal, tileIsFull } from './movement'
+import {
+  coord,
+  isInPlay,
+  isUnprotectedBonusAnimal,
+  placeAnimal,
+  slideAnimal,
+  tileIsFull,
+} from './movement'
 import type {
   Animal,
   CurrentDirection,
@@ -350,6 +357,13 @@ export const CARD_EFFECTS: Record<string, CardEffect> = {
   'current-shield': (state, player, _card, target) => {
     const animal = requireOwnAnimal(state, player, target)
     if (typeof animal === 'string') return { ok: false, error: animal }
+    if (isUnprotectedBonusAnimal(state, animal)) {
+      return {
+        ok: false,
+        error: 'That animal takes your faction extra square, and that one is never out of ' +
+          'the current. Shield a different one.',
+      }
+    }
     animal.shieldedForRound = state.round
     return { ok: true, detail: 'That animal ignores the current in the coming Current Phase.' }
   },

@@ -67,6 +67,15 @@ export interface FactionRules {
    * different kind of advantage rather than a bigger helping of the same one.
    */
   oneAnimalBonus: number
+  /**
+   * The price of that extra square: the animal carrying it is never out of the current.
+   *
+   * An anchor, a Current Shield or anything else that would let it ignore the water does
+   * not stick to it. It makes naming the animal a real decision rather than an accident of
+   * which one happened to move last, and it bites hardest on the faction the river already
+   * pushes around the most.
+   */
+  bonusAnimalUnprotected: boolean
   /** Swans: spaces subtracted from the current's effective strength. */
   currentResistance: number
   /** Beavers: resources removed from the cost of anything they build. */
@@ -563,6 +572,7 @@ export const DEFAULT_RULES: GameRules = {
       actionsPerTurn: 1,
       goWithTheFlowBonus: 0,
       oneAnimalBonus: DUCK_EXTRA_MOVE,
+      bonusAnimalUnprotected: true,
       currentResistance: 0,
       buildDiscount: 0,
       forbiddenEquipment: [],
@@ -576,6 +586,7 @@ export const DEFAULT_RULES: GameRules = {
       actionsPerTurn: 1,
       goWithTheFlowBonus: 0,
       oneAnimalBonus: 0,
+      bonusAnimalUnprotected: false,
       currentResistance: 1,
       buildDiscount: 0,
       forbiddenEquipment: [],
@@ -589,6 +600,7 @@ export const DEFAULT_RULES: GameRules = {
       actionsPerTurn: 2,
       goWithTheFlowBonus: 0,
       oneAnimalBonus: 0,
+      bonusAnimalUnprotected: false,
       currentResistance: 0,
       buildDiscount: 0,
       forbiddenEquipment: ['anchor', 'rope'],
@@ -602,6 +614,7 @@ export const DEFAULT_RULES: GameRules = {
       actionsPerTurn: 1,
       goWithTheFlowBonus: 0,
       oneAnimalBonus: 0,
+      bonusAnimalUnprotected: false,
       currentResistance: 0,
       buildDiscount: 1,
       forbiddenEquipment: [],
