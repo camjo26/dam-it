@@ -78,10 +78,28 @@ export interface FactionRules {
   bonusAnimalUnprotected: boolean
   /** Swans: spaces subtracted from the current's effective strength. */
   currentResistance: number
+  /**
+   * Whether resistance also applies to a current running toward the far bank.
+   *
+   * It used to, and it was costing the Swans the one thing the river ever gives away: a
+   * free square of progress. An ability that turns down help is a drawback wearing an
+   * ability's coat, so by default they only brace against water that is pushing them
+   * sideways or back.
+   */
+  resistsForwardCurrents: boolean
   /** Beavers: resources removed from the cost of anything they build. */
   buildDiscount: number
   /** Frogs cannot use these equipment items. */
   forbiddenEquipment: EquipmentId[]
+  /**
+   * Power Cards this faction may play in a round, when that is more than everybody else
+   * gets. Zero leaves them on the table's limit.
+   *
+   * The Frogs buy three times as many cards as anyone else, because a second action with
+   * half the equipment list closed to it has little else to buy, and they can only ever
+   * play one of them a round. This is the knob that lets the hoard be worth something.
+   */
+  powerCardPlaysPerRound: number
 }
 
 export interface EquipmentRules {
@@ -574,8 +592,10 @@ export const DEFAULT_RULES: GameRules = {
       oneAnimalBonus: DUCK_EXTRA_MOVE,
       bonusAnimalUnprotected: true,
       currentResistance: 0,
+      resistsForwardCurrents: false,
       buildDiscount: 0,
       forbiddenEquipment: [],
+      powerCardPlaysPerRound: 0,
     },
     swans: {
       id: 'swans',
@@ -588,8 +608,10 @@ export const DEFAULT_RULES: GameRules = {
       oneAnimalBonus: 0,
       bonusAnimalUnprotected: false,
       currentResistance: 1,
+      resistsForwardCurrents: false,
       buildDiscount: 0,
       forbiddenEquipment: [],
+      powerCardPlaysPerRound: 0,
     },
     frogs: {
       id: 'frogs',
@@ -602,8 +624,14 @@ export const DEFAULT_RULES: GameRules = {
       oneAnimalBonus: 0,
       bonusAnimalUnprotected: false,
       currentResistance: 0,
+      resistsForwardCurrents: false,
       buildDiscount: 0,
-      forbiddenEquipment: ['anchor', 'rope'],
+      // The rope only, since v0.09. The ban was printed when a rope reached three squares
+      // and could not choose its direction; at six it is the best item in the shop, and
+      // being the one faction shut out of it was costing the Frogs more than their extra
+      // action was worth. Anchors stay out: a frog does not sit still.
+      forbiddenEquipment: ['anchor'],
+      powerCardPlaysPerRound: 0,
     },
     beavers: {
       id: 'beavers',
@@ -616,8 +644,10 @@ export const DEFAULT_RULES: GameRules = {
       oneAnimalBonus: 0,
       bonusAnimalUnprotected: false,
       currentResistance: 0,
+      resistsForwardCurrents: false,
       buildDiscount: 1,
       forbiddenEquipment: [],
+      powerCardPlaysPerRound: 0,
     },
   },
   distraction: {
@@ -720,6 +750,12 @@ export const DEFAULT_RULES: GameRules = {
     difficulty: 'normal',
     stepDelayMs: 220,
   },
+}
+
+/** Power Cards this player may play this round, taking any faction override into account. */
+export function cardPlaysAllowed(rules: GameRules, factionId: FactionId): number {
+  const own = rules.factions[factionId].powerCardPlaysPerRound
+  return own > 0 ? own : rules.powerCards.playsPerPlayerPerRound
 }
 
 export function cloneRules(rules: GameRules): GameRules {

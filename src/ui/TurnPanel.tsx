@@ -17,9 +17,9 @@ import {
 import type { GameAction, RopeAxis } from '../game/engine'
 import { coord, describeTile, isInPlay, isUnprotectedBonusAnimal } from '../game/movement'
 import { collectorsLeft } from '../game/production'
-import { COLLECTOR_AREAS } from '../game/rules'
+import { cardPlaysAllowed, COLLECTOR_AREAS } from '../game/rules'
 import type { Animal, EquipmentId, GameState, Player, ResourceId } from '../game/types'
-import { EQUIPMENT_IDS, RESOURCE_IDS, RESOURCE_LABELS } from '../game/types'
+import { EQUIPMENT_IDS, FACTION_IDS, RESOURCE_IDS, RESOURCE_LABELS } from '../game/types'
 import { bg, equipmentArt, factionArt, resourceArt } from './art'
 import { TradePanel } from './TradePanel'
 import { startCardTargeting, targetingPrompt, type Targeting } from './targeting'
@@ -390,6 +390,18 @@ function article(word: string): string {
  * rules rather than written out, so editing a distance in the rules editor changes the
  * explanation too and the two can never disagree.
  */
+/**
+ * The factions shut out of an item, as a sentence. Read off the rules rather than written
+ * out, because which factions those are is a knob now and has moved once already.
+ */
+function bannedFor(state: GameState, item: EquipmentId): string {
+  const names = FACTION_IDS
+    .filter((id) => state.rules.factions[id].forbiddenEquipment.includes(item))
+    .map((id) => state.rules.factions[id].name)
+  if (names.length === 0) return ''
+  return ` ${names.join(' and ')} cannot use ${item}s.`
+}
+
 function equipmentInfo(state: GameState, item: EquipmentId): string[] {
   const rules = state.rules
   const fx = rules.equipmentEffects
@@ -436,7 +448,7 @@ function equipmentInfo(state: GameState, item: EquipmentId): string[] {
       'You say which way it sets off, across the river or up and down it, so the two ' +
         'squares need not both be spent on the same line.',
       'The way out of a bad tile when you have no movement left, or a way to gather a group.',
-      'Single use. Frogs cannot use ropes.',
+      `Single use.${bannedFor(state, 'rope')}`,
     )
   }
 
@@ -455,7 +467,7 @@ function equipmentInfo(state: GameState, item: EquipmentId): string[] {
     }
     lines.push(
       'The answer to sitting on a 4 you cannot get off, or to holding a good square.',
-      'Single use. Frogs cannot use anchors.',
+      `Single use.${bannedFor(state, 'anchor')}`,
     )
   }
 
@@ -884,7 +896,7 @@ export function Hand({
   }
 
   const limitReached =
-    player.powerCardsPlayedThisRound >= state.rules.powerCards.playsPerPlayerPerRound
+    player.powerCardsPlayedThisRound >= cardPlaysAllowed(state.rules, player.factionId)
 
   return (
     <>

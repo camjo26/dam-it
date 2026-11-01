@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { playAiTurn } from '../src/game/ai'
 import { assessCurrent } from '../src/game/current'
 import { applyAction, equipmentCost } from '../src/game/engine'
+import { cardPlaysAllowed, defaultRules } from '../src/game/rules'
 import { scoreGame } from '../src/game/scoring'
 import {
   animalsOf,
@@ -675,5 +676,86 @@ describe('AI', () => {
       expect(applied.ok).toBe(true)
       if (applied.ok) replay = applied.state
     }
+  })
+})
+
+describe('resistance and water that is already helping', () => {
+  it('lets a Swan take a forward current in full', () => {
+    // Every tile pushes toward the far bank. Bracing against that was throwing away the one
+    // thing the river ever gives away, so resistance no longer applies to it.
+    let state = makeGame({ currentStrength: 2, directionWeights: [0, 0, 1, 0] })
+    state = startPlayerTurns(state)
+    const swan = animalsOf(state, 'swans')[0]
+    put(state, state.animals.find((a) => a.id === swan.id)!, 3, 2)
+
+    state = must(reachCurrentPhase(state), { type: 'resolve-current' })
+    expect(state.animals.find((a) => a.id === swan.id)!.row).toBe(4)
+  })
+
+  it('still braces against a current pushing it sideways', () => {
+    let state = makeGame({ currentStrength: 2, directionWeights: [0, 1, 0, 0] })
+    state = startPlayerTurns(state)
+    const swan = animalsOf(state, 'swans')[0]
+    put(state, state.animals.find((a) => a.id === swan.id)!, 3, 2)
+
+    state = must(reachCurrentPhase(state), { type: 'resolve-current' })
+    expect(state.animals.find((a) => a.id === swan.id)!.col).toBe(4)
+  })
+
+  it('goes back to fighting everything when the switch is turned on', () => {
+    let state = makeGame({
+      currentStrength: 2,
+      directionWeights: [0, 0, 1, 0],
+      tweak: (rules) => {
+        rules.factions.swans.resistsForwardCurrents = true
+      },
+    })
+    state = startPlayerTurns(state)
+    const swan = animalsOf(state, 'swans')[0]
+    put(state, state.animals.find((a) => a.id === swan.id)!, 3, 2)
+
+    state = must(reachCurrentPhase(state), { type: 'resolve-current' })
+    expect(state.animals.find((a) => a.id === swan.id)!.row).toBe(3)
+  })
+})
+
+describe('a faction that may play more Power Cards than the table', () => {
+  it('takes its own limit over the shared one', () => {
+    const rules = defaultRules()
+    expect(cardPlaysAllowed(rules, 'frogs')).toBe(rules.powerCards.playsPerPlayerPerRound)
+    rules.factions.frogs.powerCardPlaysPerRound = 2
+    expect(cardPlaysAllowed(rules, 'frogs')).toBe(2)
+    expect(cardPlaysAllowed(rules, 'ducks')).toBe(rules.powerCards.playsPerPlayerPerRound)
+  })
+})
+
+describe('equipment a faction is shut out of', () => {
+  it('refuses the item to a faction on the banned list', () => {
+    // The Frogs got the rope back in v0.09, so the mechanism needs a test of its own rather
+    // than riding on whatever the default bans happen to be this week.
+    let state = startPlayerTurns(makeGame({
+      tweak: (rules) => {
+        rules.factions.ducks.forbiddenEquipment = ['rope']
+      },
+    }))
+    stockUp(state, 'ducks')
+    const error = expectRejected(state, { type: 'buy-equipment', item: 'rope' })
+    expect(error).toMatch(/cannot use ropes/)
+
+    // And the item it is still allowed goes through as normal.
+    state = must(state, { type: 'buy-equipment', item: 'anchor' })
+    expect(playerOf(state, 'ducks').equipment.anchor).toBe(1)
+  })
+
+  it('lets the Frogs buy a rope now that the ban is only on anchors', () => {
+    let state = startPlayerTurns(makeGame())
+    // Round the table to the Frogs, who are third in turn order.
+    state = must(state, { type: 'end-turn' })
+    state = must(state, { type: 'end-turn' })
+    stockUp(state, 'frogs')
+    state = must(state, { type: 'buy-equipment', item: 'rope' })
+    expect(playerOf(state, 'frogs').equipment.rope).toBe(1)
+    expect(expectRejected(state, { type: 'buy-equipment', item: 'anchor' }))
+      .toMatch(/cannot use anchors/)
   })
 })

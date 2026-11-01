@@ -262,7 +262,7 @@ function describeAbility(id: FactionId): string {
     case 'swans':
       return 'The current affects them one less.'
     case 'frogs':
-      return 'An extra action each turn, but no anchors or ropes.'
+      return 'An extra action each turn, but they cannot use anchors.'
     case 'beavers':
       return 'Everything they build costs one resource less.'
   }

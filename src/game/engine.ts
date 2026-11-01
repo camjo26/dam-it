@@ -32,7 +32,7 @@ import {
 } from './production'
 import { dealRoles, saboteurUsesLeft } from './roles'
 import { rollDie } from './rng'
-import type { GameRules } from './rules'
+import { cardPlaysAllowed, type GameRules } from './rules'
 import { scoreGame } from './scoring'
 import { bagTotal, describeTerms, judgeTrade, settleTrade } from './trade'
 import type {
@@ -678,7 +678,7 @@ function handlePlayPowerCard(
     return fail(`${card.name} can only be played ${when}.`)
   }
 
-  const limit = state.rules.powerCards.playsPerPlayerPerRound
+  const limit = cardPlaysAllowed(state.rules, player.factionId)
   if (player.powerCardsPlayedThisRound >= limit) {
     return fail(`Only ${limit} Power Card may be played per player per round.`)
   }

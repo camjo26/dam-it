@@ -681,6 +681,26 @@ export const FACTION_FIELDS: RuleField[] = [
     note: 'Swans only by default. Never takes the effective strength below zero.',
   },
   {
+    path: 'powerCardPlaysPerRound',
+    label: 'Power Cards it may play a round',
+    type: 'number',
+    status: 'provisional',
+    min: 0,
+    max: 4,
+    note: 'Zero leaves this faction on the table limit. The Frogs buy three times as many ' +
+      'cards as anybody else and can only play one of them, so this is the knob that makes ' +
+      'their spare action worth something.',
+  },
+  {
+    path: 'resistsForwardCurrents',
+    label: 'Resists a current that is helping them too',
+    type: 'boolean',
+    status: 'provisional',
+    note: 'Off by default. With it on, resistance also cancels a current running toward ' +
+      'the far bank, which is how it used to work and which meant the ability turned down ' +
+      'free progress.',
+  },
+  {
     path: 'buildDiscount',
     label: 'Build discount',
     type: 'number',

@@ -1,4 +1,4 @@
-export const VERSION = '0.08'
+export const VERSION = '0.09'
 
 export interface ChangelogEntry {
   version: string
@@ -8,6 +8,23 @@ export interface ChangelogEntry {
 
 // Newest first.
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.09',
+    date: '2026-11-01',
+    notes: [
+      'Swans no longer fight a current that is carrying them toward the far bank. They '
+        + 'brace against water pushing them sideways or back, and ride the rest. Their '
+        + 'ability was turning down the only thing the river gives away for nothing.',
+      'Worth 9 points of win rate over 500 games a side, 15.6% to 24.6%, and it brought '
+        + 'the Ducks down from 29.8% to 27.6% without the Duck ability being touched.',
+      'Frogs may use ropes again. Anchors are still out. The ban was printed when a rope '
+        + 'reached three squares; at six it is the best thing in the shop, and being the '
+        + 'one faction shut out of it cost them more than the extra action was worth.',
+      'Measured and not kept: letting the Frogs play two Power Cards a round changed '
+        + 'nothing at all. The knob is in the rules editor, switched off.',
+      'The computer opponents stop buying Power Cards once two are sitting unplayed.',
+    ],
+  },
   {
     version: '0.08',
     date: '2026-11-01',

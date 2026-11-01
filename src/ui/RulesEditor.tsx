@@ -369,7 +369,11 @@ function FactionTab({
                 Cannot use
                 <span className="badge-provisional badge-established">established</span>
               </div>
-              <div className="note">Frogs cannot use anchors or ropes.</div>
+              <div className="note">
+                The Frogs are shut out of anchors. The rope ban came off in v0.09, when a
+                rope that reaches six squares turned out to be worth more than their extra
+                action.
+              </div>
             </div>
             <div className="row wrap">
               {(['anchor', 'rope', 'raft', 'dam'] as const).map((item) => {

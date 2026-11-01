@@ -203,7 +203,10 @@ function HowToPlay({ rules }: { rules: GameRules }) {
         </li>
         <li>
           <b>Frogs</b> ({rules.factions.frogs.startingAnimals}) get{' '}
-          {rules.factions.frogs.actionsPerTurn} actions a turn but cannot use anchors or ropes.
+          {rules.factions.frogs.actionsPerTurn} actions a turn. They cannot use{' '}
+          {rules.factions.frogs.forbiddenEquipment.length === 0
+            ? 'anything they have been shut out of, which is nothing at the moment'
+            : rules.factions.frogs.forbiddenEquipment.map((item) => `${item}s`).join(' or ')}.
         </li>
         <li>
           <b>Beavers</b> ({rules.factions.beavers.startingAnimals}) build everything for{' '}

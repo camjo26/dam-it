@@ -30,7 +30,7 @@ import { deriveFloat } from './rng'
 import { missionById } from './missions'
 import { collectorsLeft } from './production'
 import { valueGaining, valueGiving } from './trade'
-import { COLLECTOR_AREAS } from './rules'
+import { cardPlaysAllowed, COLLECTOR_AREAS } from './rules'
 import { saboteurUsesLeft } from './roles'
 import type {
   AiDifficulty,
@@ -116,6 +116,9 @@ export const AI_OPPONENTS: Record<AiDifficulty, { name: string; style: string }>
     style: 'Picks the quietest lane, hoards for Power Cards and uses them against you.',
   },
 }
+
+/** Unplayed Power Cards an opponent will sit on before it stops buying more. */
+const AI_MAX_HELD_CARDS = 2
 
 function weightsFor(player: Player): AiWeights {
   return AI_WEIGHTS[player.aiDifficulty] ?? AI_WEIGHTS.normal
@@ -312,7 +315,7 @@ function damSpot(state: GameState, player: Player): { col: number; row: number }
 function cardPlay(state: GameState, player: Player): GameAction | null {
   const w = weightsFor(player)
   if (!w.playsCards) return null
-  if (player.powerCardsPlayedThisRound >= state.rules.powerCards.playsPerPlayerPerRound) {
+  if (player.powerCardsPlayedThisRound >= cardPlaysAllowed(state.rules, player.factionId)) {
     return null
   }
 
@@ -563,8 +566,14 @@ export function chooseAiAction(state: GameState, playerId: string): GameAction |
     const spare = totalResources(player) - w.reserve
     const mission = missionById(state, player.missionId)
     const wantsCards = mission?.check === 'power-cards-bought'
+    // Only one card may be played a round, so a third one sitting in hand is four resources
+    // doing nothing at all. It was the Frogs who paid for this: with two actions a turn and
+    // half the equipment list closed to them, their spare action went on cards they would
+    // never get to play. A mission that counts cards bought is the one reason to hoard.
+    const roomInHand = player.hand.length < AI_MAX_HELD_CARDS || wantsCards
     if (
       w.playsCards &&
+      roomInHand &&
       state.rules.powerCards.enabled &&
       state.powerDeck.length > 0 &&
       (spare >= state.rules.powerCards.cost || wantsCards) &&

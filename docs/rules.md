@@ -40,8 +40,8 @@ Taken from the brief and from the printed components in this folder.
 | | Animals | Move | Ability | Weakness |
 |---|---|---|---|---|
 | Ducks | 10 | 3 | One animal of theirs moves one extra square, every turn, all game | That animal is never out of the current, and Distraction, see below |
-| Swans | 8 | 3 | The current affects them one less | |
-| Frogs | 10 | 3 | One extra action per turn | No anchors, no ropes |
+| Swans | 8 | 3 | The current affects them one less, unless it is carrying them forward | |
+| Frogs | 10 | 3 | One extra action per turn | No anchors |
 | Beavers | 10 | 3 | Everything they build costs one resource less | |
 
 **A turn** is your movement points, split between your animals however you like, plus one
@@ -109,6 +109,9 @@ Chosen so the game is playable. Each is deliberately simple and reversible.
 | A destroyed dam bursts | the squares it calmed run at 3 | Asked for directly: the water it was holding has to go somewhere, so the safest line on the board becomes the worst of it. Zero sends those squares back to the strength they were rolled at. | `dam.burstCurrent` |
 | Four animals to a square | yes, on river squares | Binds anything a player chooses to do, including a Distraction drag, which is refused outright rather than quietly stopping the last animal short. It does not bind the river: a current carries every animal on a tile, so a square can hold five through nobody's choice, and a drag that adds nothing to such a square is still legal. | `board.maxAnimalsPerTile` |
 | The Ducks' ability | one animal, one extra square, named by use | Go With the Flow was the mirror image of Swan resistance, so one of the two was always going to be strictly better. The extra square is spent after the shared movement, and whichever animal spends it first keeps it for the rest of the game. The knob is still there. | `factions.ducks.oneAnimalBonus` |
+| Swan resistance and helpful water | they do not resist a current running toward the far bank | Resisting everything meant the ability turned down the one thing the river gives away for nothing, and the numbers below say it was costing them 9 points of win rate. They still brace against water pushing them sideways or back. | `factions.swans.resistsForwardCurrents` |
+| Frogs and ropes | allowed again since v0.09; anchors still banned | **A departure from the printed rules**, which say no anchors and no ropes. The ban was written when a rope reached 3 squares and could not choose its direction. At 6 squares it is the best item in the shop, and shutting the Frogs out of it cost them about 5 points of win rate - more than their extra action is worth. Anchors stay out, since a frog does not sit still. | `factions.frogs.forbiddenEquipment` |
+| Power Card plays per faction | off | Measured on the Frogs, who buy three times as many cards as anybody else and can only play one a round. Letting them play two changed nothing: the cards are too situational for a second one to be worth playing in the same round. The knob is there if a faction ever needs it. | `factions.<id>.powerCardPlaysPerRound` |
 | The price on it | that animal is never out of the current | An anchor and a Current Shield both slide off the animal carrying the extra square, however they got there. It makes naming that animal a decision rather than an accident. It is flavour rather than balance: see the numbers below. | `factions.ducks.bonusAnimalUnprotected` |
 | Range is orthogonal | yes | Asked for directly: three squares means three steps along the rows and columns, so a diagonal corner is further than it looks. Distraction tokens, ropes and Rescue all use it. | n/a |
 | Trading | on, free, one offer a turn | Offer resources and Power Cards, and say what you want back. Cards are asked for by number, not name, because a hand is secret. The other player takes it, leaves it, or names their own terms. A computer opponent answers inside the same action, and the answer is reported in a popup rather than only in the log. | `trade.*` |
@@ -157,66 +160,55 @@ all of them are listed in the app under **How to play > Open questions**.
 
 ## What the numbers say
 
-From `pnpm sim -- --games 200`, v0.08 rules, Normal opponents, none failed. Raw data in
-`docs/balance/v0.08-price-on.csv` and `v0.08-price-off.csv`, with the runs before them in
-`v0.07.csv`, `v0.05.csv`, `v0.04.csv`, `v0.03.csv` and `baseline.csv`.
+From `pnpm sim -- --games 500 --seed 7`, v0.09 rules, Normal opponents, none failed. Raw data
+in `docs/balance/v0.09.csv`, with the runs before it in `v0.08-price-on.csv`, `v0.07.csv`,
+`v0.05.csv`, `v0.04.csv`, `v0.03.csv` and `baseline.csv`.
 
 | Faction | Win % | Score | Animals across | Mission % | Built | Carried by the current |
 |---|---|---|---|---|---|---|
-| Ducks | 32.5 | 5.08 | 3.39 | 38 | 6.4 | 18.6 |
-| Swans | 18 | 4.26 | 3.13 | 26.5 | 6.4 | 6.2 |
-| Frogs | 16 | 3.72 | 2.20 | 35.5 | 4.5 | 15.0 |
-| Beavers | 19.5 | 4.34 | 2.92 | 32.5 | 7.8 | 15.4 |
+| Ducks | 27.8 | 5.25 | 3.47 | 40.6 | 6.5 | 18.4 |
+| Swans | 20.6 | 4.92 | 3.51 | 32.2 | 6.4 | 8.2 |
+| Beavers | 20.6 | 4.65 | 2.99 | 38.0 | 7.8 | 14.8 |
+| Frogs | 14.0 | 3.98 | 2.53 | 33.4 | 5.6 | 15.1 |
 
-**The Ducks' new ability is stronger than the one it replaced, and trimming it is not as
-simple as it looks.** They have gone from 24% to 31.5% and now get the most animals across.
-Go With the Flow only paid out when the current happened to move them, and near an edge it was
-actively dangerous; an extra square every turn pays every turn. Four ways of pricing it were
-measured over 200 games each, same seeds:
+**Swan resistance was the big one, and it was a bug in the design rather than a weak
+ability.** They were bracing against every current, including the quarter of them running
+toward the far bank, so the ability spent a third of its working life turning down free
+progress. Measured over 500 games a side, on the same seeds:
 
-| Variant | Ducks win % |
-|---|---|
-| As it stands | 31.5 |
-| The fast duck can never be anchored or shielded | 32.5 |
-| Eight starting animals instead of ten | 32.5 |
-| 2 shared movement + 1 for the fast duck (3 in total) | 21.5 |
-| No ability at all | 17.5 |
+| | Ducks | Swans | Beavers | Frogs |
+|---|---|---|---|---|
+| Resisting everything | 29.8 | **15.6** | 26.0 | 12.8 |
+| Only resisting water that is not helping | 27.6 | **24.6** | 23.4 | 9.0 |
+| And the Frogs given the rope back | 27.8 | 20.6 | 20.6 | **14.0** |
 
-Two of those do nothing at all, and for understandable reasons. **The animal count is dead
-weight**: the Ducks get 3.4 animals across out of ten, so ten never binds. **The anchor price
-cannot be measured by the simulator**: the computer opponents anchor a duck 0.43 times a game,
-and with ten ducks the odds of that anchor being the one carrying the extra square are about
-one in ten, so the rule applies roughly once every twenty games. A person, who would anchor
-the animal they care about, would feel it. It is in the build as flavour and a decision, not
-as a nerf.
+Nine points, about five standard errors at that sample size, and the profile moves with it:
+animals across 3.13 to 3.53, missions 29.4% to 33.6%, carried by the current 6.7 to 8.1.
+**Nothing was done to the Ducks, and they came down anyway**, from 29.8 to 27.8: win rate is
+zero-sum, so lifting the floor lowers the ceiling. That is the argument against ever fixing a
+spread by cutting whatever is at the top of it.
 
-That leaves no gentle version: full strength is 31.5 and one notch down is 21.5, with nothing
-at 25.
+**The Frogs needed the printed drawback loosened, not a new ability.** The obvious idea was
+measured first and did nothing: they buy 3.5 Power Cards a game and can only play one a
+round, so letting them play two looked like free value. It came out at 8.2% against 9.0%,
+with cards bought, animals across and score identical to the decimal - the limit was never
+what was binding. Giving them the rope back is worth about 5 points, and the whole profile
+shifts with it: equipment built 4.5 to 5.6, animals across 2.28 to 2.53, cards bought 3.5 to
+2.4. Their spare action stops leaking into cards it cannot use.
 
-**The more useful thing in those numbers is the field, not the Ducks.** With the Duck ability
-switched off entirely the table reads Beavers 26, Frogs 21.5, Swans 19.5, Ducks 17.5 - an
-8.5 point spread with no Duck ability in it at all. Swan resistance has not cleared 19.5% in
-any run, and the Frogs spend their second action on Power Cards that do not pay for
-themselves. The headroom is in lifting those two rather than in cutting the one ability that
-a player can feel.
+**Two caveats on the Frogs.** Their drawback is printed and the change departs from it, which
+is noted in the table above. And their advantage is the thing this simulator is worst at
+valuing: actions are where the computer opponents' judgement is weakest, so a person playing
+Frogs is probably worth more than 14%.
 
-**Losing animals over the side costs about half an animal a game.** Unchanged from v0.05:
-crossings sit around 3.2 and scores around 4.7. A real cost without being a bloodbath, which is
-about where a new hazard wants to sit.
-
-**Swan resistance is still not paying for itself.** Swans are carried by the current 6.3 times
-a game against everyone else's 15 to 19, so the river almost never throws them off the board,
-and they still win least but one at 17%. Whatever is holding them back is not the water.
-
-**Frogs are last at 16%, and the second action looks like the reason.** They buy 3.6 Power
-Cards a game, spend 32 of their 36 resources, build the fewest things (4.5) and get the fewest
-animals across (2.24). They are converting income into cards rather than into crossings.
+**Losing animals over the side still costs about half an animal a game**, unchanged since
+v0.05. A real cost without being a bloodbath, which is about where a new hazard wants to sit.
 
 **Still worth a look: there is more income than there is to spend it on.** A faction earns
-about 36 resources across ten rounds and spends 24 to 32. Trading has not changed this, because
-the computer opponents only ever answer offers - they never make them - so in an all-AI run no
-trade is ever proposed. What trading does in a game with a person in it is still untested by
-the simulator.
+about 36 resources across ten rounds and spends 24 to 32. Trading has not changed this,
+because the computer opponents only ever answer offers - they never make them - so in an
+all-AI run no trade is ever proposed. What trading does in a game with a person in it is
+still untested by the simulator.
 
 One smaller note, unchanged: with no sharing penalty, where other players put their collectors
 never matters. Setting `production.sharingPenalty` to 1 makes the Market contested, and it

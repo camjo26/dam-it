@@ -182,9 +182,16 @@ export function assessCurrent(state: GameState, animal: Animal): CurrentAssessme
   const strengthBeforeResistance = strength
   const faction = rules.factions[animal.factionId]
   if (faction.currentResistance > 0 && strength > 0) {
-    const before = strength
-    strength = Math.max(0, strength - faction.currentResistance)
-    reasons.push(`${faction.name} resist the current: ${before} reduced to ${strength}.`)
+    // Water running toward the far bank is doing the work for them, and bracing against it
+    // only threw away the one thing the river ever gives away.
+    if (direction === 'forward' && !faction.resistsForwardCurrents) {
+      reasons.push(`${faction.name} do not fight water that is taking them where they want ` +
+        'to go.')
+    } else {
+      const before = strength
+      strength = Math.max(0, strength - faction.currentResistance)
+      reasons.push(`${faction.name} resist the current: ${before} reduced to ${strength}.`)
+    }
   }
 
   return { baseStrength, effectiveStrength: strength, strengthBeforeResistance, direction,
