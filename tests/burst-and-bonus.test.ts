@@ -89,11 +89,12 @@ describe('the rope', () => {
       animalId: mine[0].id,
       towardAnimalId: mine[1].id,
     })
+    // Six squares apart, so three of pull closes half of it.
     const pulled = after.animals.find((a) => a.id === mine[0].id)!
-    expect(pulled.col + pulled.row).toBe(4)
+    expect(pulled.col + pulled.row).toBe(5)
   })
 
-  it('spends its two squares on whichever axis the player picks', () => {
+  it('spends its squares on whichever axis the player picks', () => {
     const state = startPlayerTurns(makeGame())
     playerOf(state, 'ducks').equipment.rope = 1
     const mine = animalsOf(state, 'ducks')
@@ -106,7 +107,7 @@ describe('the rope', () => {
       towardAnimalId: mine[1].id,
       axis: 'across',
     })
-    expect(across.animals.find((a) => a.id === mine[0].id)).toMatchObject({ col: 3, row: 1 })
+    expect(across.animals.find((a) => a.id === mine[0].id)).toMatchObject({ col: 4, row: 1 })
 
     const along = must(state, {
       type: 'use-rope',
@@ -114,7 +115,7 @@ describe('the rope', () => {
       towardAnimalId: mine[1].id,
       axis: 'along',
     })
-    expect(along.animals.find((a) => a.id === mine[0].id)).toMatchObject({ col: 1, row: 3 })
+    expect(along.animals.find((a) => a.id === mine[0].id)).toMatchObject({ col: 1, row: 4 })
   })
 })
 

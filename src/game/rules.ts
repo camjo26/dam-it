@@ -288,9 +288,10 @@ const MAX_ANIMALS_PER_TILE = 4
 const DAM_BURST_CURRENT = 3
 
 // A rope reaches most of the way across a ten-wide board, so an animal stranded on bad water
-// is never beyond help from the rest of the group - it just takes two squares to get there.
+// is never beyond help from the rest of the group. Three squares of pull is a round of
+// movement and then some, which is what makes spending the action on it worth doing.
 const ROPE_RANGE = 6
-const ROPE_DISTANCE = 2
+const ROPE_DISTANCE = 3
 
 // One duck, the same one all game, walks an extra square.
 const DUCK_EXTRA_MOVE = 1

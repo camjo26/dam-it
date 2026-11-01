@@ -361,7 +361,9 @@ describe('equipment', () => {
     state = must(state, { type: 'buy-equipment', item: 'rope' })
     state = must(state, { type: 'use-rope', animalId: first.id, towardAnimalId: second.id })
 
-    expect(state.animals.find((a) => a.id === first.id)!.row).toBe(3)
+    // Three rows apart and three squares of pull, so it arrives on the other animal's
+    // square, which is legal: four animals fit there.
+    expect(state.animals.find((a) => a.id === first.id)!.row).toBe(4)
   })
 })
 

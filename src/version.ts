@@ -1,4 +1,4 @@
-export const VERSION = '0.09'
+export const VERSION = '0.10'
 
 export interface ChangelogEntry {
   version: string
@@ -8,6 +8,14 @@ export interface ChangelogEntry {
 
 // Newest first.
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '0.10',
+    date: '2026-11-01',
+    notes: [
+      'The rope pulls 3 squares instead of 2. It still reaches 6, you still choose whether '
+        + 'it sets off across the river or along it, and the price is unchanged.',
+    ],
+  },
   {
     version: '0.09',
     date: '2026-11-01',

@@ -54,7 +54,7 @@ action: build equipment, buy a Power Card, use a special ability, or an action a
 | Dam | 3 Wood, 2 Stone, 1 Clay | Calms the water above and below. Stays until destroyed. |
 | Raft | 1 Wood, 1 Stone, 1 Clay, 1 Reed | Move one animal forward without using a movement point. |
 | Anchor | 1 Stone, 1 Clay | One animal ignores the current for the round. Removed at the end of the Current Phase. |
-| Rope | 1 Wood, 1 Clay, 2 Reeds | Move an animal up to 2 squares toward another of yours within 6 squares. You choose whether it sets off across the river or along it. |
+| Rope | 1 Wood, 1 Clay, 2 Reeds | Move an animal up to 3 squares toward another of yours within 6 squares. You choose whether it sets off across the river or along it. |
 | Power Card | 4 resources, any mix | Drawn face down. One played per player per round. Cannot be traded. Held between rounds. |
 
 **Dams.** The owner chooses one animal per round that cannot use the calming effect. Destroying
@@ -200,6 +200,10 @@ shifts with it: equipment built 4.5 to 5.6, animals across 2.28 to 2.53, cards b
 is noted in the table above. And their advantage is the thing this simulator is worst at
 valuing: actions are where the computer opponents' judgement is weakest, so a person playing
 Frogs is probably worth more than 14%.
+
+**The rope going from 2 squares of pull to 3 in v0.10 did not move any of this.** A 200 game
+check afterwards read Ducks 28.5, Swans 22.5, Beavers 19.5, Frogs 12.0, which is the same
+table inside the noise at that sample size.
 
 **Losing animals over the side still costs about half an animal a game**, unchanged since
 v0.05. A real cost without being a bloodbath, which is about where a new hazard wants to sit.

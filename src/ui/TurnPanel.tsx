@@ -445,8 +445,8 @@ function equipmentInfo(state: GameState, item: EquipmentId): string[] {
     lines.push(
       `Pulls one of your animals up to ${fx.ropeDistance} squares toward another of your ` +
         `animals, from as far as ${fx.ropeRange} squares away.`,
-      'You say which way it sets off, across the river or up and down it, so the two ' +
-        'squares need not both be spent on the same line.',
+      'You say which way it sets off, across the river or up and down it, so the pull ' +
+        'need not all be spent on the same line.',
       'The way out of a bad tile when you have no movement left, or a way to gather a group.',
       `Single use.${bannedFor(state, 'rope')}`,
     )
@@ -944,9 +944,9 @@ export function Hand({
 /** The picks that cannot be made on the board: directions and resource choices. */
 /**
  * The rope's last question. It reaches six squares and pulls two, so it usually stops well
- * short of the animal at the other end: whether those two squares are spent across the
- * river or along it changes where the animal actually ends up, and that is the player's call
- * rather than something the engine should decide quietly.
+ * short of the animal at the other end: whether its squares are spent across the river or
+ * along it changes where the animal actually ends up, and that is the player's call rather
+ * than something the engine should decide quietly.
  */
 function RopeAxisPicks({
   animalId,

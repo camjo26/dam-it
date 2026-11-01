@@ -539,7 +539,7 @@ function handleUseRope(
   const before = coord(animal.col, animal.row)
   let moved = 0
 
-  // Step toward the other animal. The two squares need not be spent on the same axis, and
+  // Step toward the other animal. The squares need not all be spent on the same axis, and
   // with the animal six squares away they rarely land on it, so the player says which way
   // to set off: across the river or along it. Without a preference the larger gap closes
   // first, which is the straightest line to walk.

@@ -95,7 +95,7 @@ export function targetingPrompt(targeting: Targeting): string | null {
   if (targeting.kind === 'rope') {
     if (targeting.animalId === null) return 'Click the animal you want to pull.'
     if (!targeting.towardAnimalId) return 'Click the animal of yours to pull it toward.'
-    return 'Which way should it set off? It has two squares to spend.'
+    return 'Which way should it set off?'
   }
   const pick = targeting.picks[targeting.step]
   return pick ? PICK_PROMPTS[pick] : null
